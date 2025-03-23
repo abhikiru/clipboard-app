@@ -50,6 +50,13 @@ class CopiedText(Base):
     user = relationship("User", back_populates="copied_texts")
 
 
+class Admin(Base):
+    __tablename__ = "admin"
+    id = Column(Integer, primary_key=True, index=True)
+    username = Column(String, unique=True, index=True)
+    password = Column(String)
+
+
 # Create tables
 try:
     Base.metadata.create_all(bind=engine)
@@ -67,9 +74,13 @@ def get_db():
         db.close()
 
 
-# Admin credentials (Updated)
-ADMIN_USERNAME = "superadmin"
-ADMIN_PASSWORD = "securepass2025"
+# Initialize default admin credentials if not present
+def initialize_admin(db: Session):
+    admin = db.query(Admin).first()
+    if not admin:
+        default_admin = Admin(username="superadmin", password="securepass2025")
+        db.add(default_admin)
+        db.commit()
 
 
 # Routes
@@ -110,13 +121,16 @@ async def dashboard(request: Request, user_id: int, db: Session = Depends(get_db
 
 
 @app.get("/admin", response_class=HTMLResponse)
-async def admin_login_page(request: Request):
+async def admin_login_page(request: Request, db: Session = Depends(get_db)):
+    initialize_admin(db)  # Ensure default admin exists
     return templates.TemplateResponse("admin_login.html", {"request": request})
 
 
 @app.post("/admin/login", response_class=HTMLResponse)
-async def admin_login(request: Request, username: str = Form(...), password: str = Form(...)):
-    if username != ADMIN_USERNAME or password != ADMIN_PASSWORD:
+async def admin_login(request: Request, username: str = Form(...), password: str = Form(...),
+                      db: Session = Depends(get_db)):
+    admin = db.query(Admin).filter(Admin.username == username, Admin.password == password).first()
+    if not admin:
         return templates.TemplateResponse("admin_login.html",
                                           {"request": request, "error": "Invalid admin credentials"})
 
@@ -131,7 +145,11 @@ async def admin_dashboard(request: Request, db: Session = Depends(get_db)):
         return RedirectResponse(url="/admin", status_code=303)
 
     users = db.query(User).all()
-    return templates.TemplateResponse("admin_dashboard.html", {"request": request, "users": users})
+    copied_texts = db.query(CopiedText).join(User).all()
+    admin = db.query(Admin).first()
+    return templates.TemplateResponse("admin_dashboard.html",
+                                      {"request": request, "users": users, "copied_texts": copied_texts,
+                                       "admin": admin})
 
 
 @app.post("/admin/add_user", response_class=HTMLResponse)
@@ -145,18 +163,65 @@ async def add_user(request: Request, username: str = Form(...), password: str = 
         if existing_user:
             return templates.TemplateResponse("admin_dashboard.html",
                                               {"request": request, "error": "Username already exists",
-                                               "users": db.query(User).all()})
+                                               "users": db.query(User).all(),
+                                               "copied_texts": db.query(CopiedText).join(User).all(),
+                                               "admin": db.query(Admin).first()})
 
         new_user = User(username=username, password=password, email=email)
         db.add(new_user)
         db.commit()
         return templates.TemplateResponse("admin_dashboard.html",
                                           {"request": request, "success": "User added successfully",
-                                           "users": db.query(User).all()})
+                                           "users": db.query(User).all(),
+                                           "copied_texts": db.query(CopiedText).join(User).all(),
+                                           "admin": db.query(Admin).first()})
     except Exception as e:
         print(f"Add user error: {e}")
         return templates.TemplateResponse("admin_dashboard.html", {"request": request, "error": "Failed to add user",
-                                                                   "users": db.query(User).all()})
+                                                                   "users": db.query(User).all(),
+                                                                   "copied_texts": db.query(CopiedText).join(
+                                                                       User).all(), "admin": db.query(Admin).first()})
+
+
+@app.post("/admin/update_user/{user_id}", response_class=HTMLResponse)
+async def update_user(request: Request, user_id: int, username: str = Form(...), password: str = Form(...),
+                      email: str = Form(...), db: Session = Depends(get_db)):
+    if request.cookies.get("admin") != "true":
+        return RedirectResponse(url="/admin", status_code=303)
+
+    try:
+        user = db.query(User).filter(User.id == user_id).first()
+        if not user:
+            return templates.TemplateResponse("admin_dashboard.html", {"request": request, "error": "User not found",
+                                                                       "users": db.query(User).all(),
+                                                                       "copied_texts": db.query(CopiedText).join(
+                                                                           User).all(),
+                                                                       "admin": db.query(Admin).first()})
+
+        # Check if the new username is already taken by another user
+        existing_user = db.query(User).filter(User.username == username, User.id != user_id).first()
+        if existing_user:
+            return templates.TemplateResponse("admin_dashboard.html",
+                                              {"request": request, "error": "Username already exists",
+                                               "users": db.query(User).all(),
+                                               "copied_texts": db.query(CopiedText).join(User).all(),
+                                               "admin": db.query(Admin).first()})
+
+        user.username = username
+        user.password = password
+        user.email = email
+        db.commit()
+        return templates.TemplateResponse("admin_dashboard.html",
+                                          {"request": request, "success": "User updated successfully",
+                                           "users": db.query(User).all(),
+                                           "copied_texts": db.query(CopiedText).join(User).all(),
+                                           "admin": db.query(Admin).first()})
+    except Exception as e:
+        print(f"Update user error: {e}")
+        return templates.TemplateResponse("admin_dashboard.html", {"request": request, "error": "Failed to update user",
+                                                                   "users": db.query(User).all(),
+                                                                   "copied_texts": db.query(CopiedText).join(
+                                                                       User).all(), "admin": db.query(Admin).first()})
 
 
 @app.post("/admin/delete_user/{user_id}", response_class=HTMLResponse)
@@ -168,17 +233,56 @@ async def delete_user(request: Request, user_id: int, db: Session = Depends(get_
         user = db.query(User).filter(User.id == user_id).first()
         if not user:
             return templates.TemplateResponse("admin_dashboard.html", {"request": request, "error": "User not found",
-                                                                       "users": db.query(User).all()})
+                                                                       "users": db.query(User).all(),
+                                                                       "copied_texts": db.query(CopiedText).join(
+                                                                           User).all(),
+                                                                       "admin": db.query(Admin).first()})
 
         db.delete(user)
         db.commit()
         return templates.TemplateResponse("admin_dashboard.html",
                                           {"request": request, "success": "User deleted successfully",
-                                           "users": db.query(User).all()})
+                                           "users": db.query(User).all(),
+                                           "copied_texts": db.query(CopiedText).join(User).all(),
+                                           "admin": db.query(Admin).first()})
     except Exception as e:
         print(f"Delete user error: {e}")
         return templates.TemplateResponse("admin_dashboard.html", {"request": request, "error": "Failed to delete user",
-                                                                   "users": db.query(User).all()})
+                                                                   "users": db.query(User).all(),
+                                                                   "copied_texts": db.query(CopiedText).join(
+                                                                       User).all(), "admin": db.query(Admin).first()})
+
+
+@app.post("/admin/update_admin", response_class=HTMLResponse)
+async def update_admin(request: Request, username: str = Form(...), password: str = Form(...),
+                       db: Session = Depends(get_db)):
+    if request.cookies.get("admin") != "true":
+        return RedirectResponse(url="/admin", status_code=303)
+
+    try:
+        admin = db.query(Admin).first()
+        if not admin:
+            return templates.TemplateResponse("admin_dashboard.html", {"request": request, "error": "Admin not found",
+                                                                       "users": db.query(User).all(),
+                                                                       "copied_texts": db.query(CopiedText).join(
+                                                                           User).all(),
+                                                                       "admin": db.query(Admin).first()})
+
+        admin.username = username
+        admin.password = password
+        db.commit()
+        return templates.TemplateResponse("admin_dashboard.html",
+                                          {"request": request, "success": "Admin credentials updated successfully",
+                                           "users": db.query(User).all(),
+                                           "copied_texts": db.query(CopiedText).join(User).all(),
+                                           "admin": db.query(Admin).first()})
+    except Exception as e:
+        print(f"Update admin error: {e}")
+        return templates.TemplateResponse("admin_dashboard.html",
+                                          {"request": request, "error": "Failed to update admin credentials",
+                                           "users": db.query(User).all(),
+                                           "copied_texts": db.query(CopiedText).join(User).all(),
+                                           "admin": db.query(Admin).first()})
 
 
 @app.post("/api/save_text")

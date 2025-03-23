@@ -1,13 +1,11 @@
-/* Add any custom styles if needed */
 body {
     font-family: 'Inter', sans-serif;
 }
 
-input:focus {
-    transition: all 0.3s ease;
+header, footer {
+    background: linear-gradient(to right, #2563eb, #7c3aed);
 }
 
-button:hover {
-    transform: scale(1.02);
-    transition: all 0.3s ease;
+main {
+    flex: 1;
 }

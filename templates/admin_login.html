@@ -4,24 +4,27 @@
 
 {% block css %}
 <link rel="stylesheet" href="/static/admin.css">
+<style>
+    body {
+        background: #1e3a8a; /* Blue background as in the image */
+    }
+</style>
 {% endblock %}
 
 {% block content %}
-<div class="bg-white p-8 rounded-lg shadow-lg w-full max-w-md mx-auto mt-8 border-l-4 border-red-500">
-    <h2 class="text-2xl font-bold text-center text-gray-800 mb-6">Admin Login</h2>
+<div class="bg-white p-6 rounded-lg shadow-lg w-full max-w-sm mx-auto mt-12">
+    <h2 class="text-xl font-bold text-center text-gray-800 mb-6">Login to Clipboard Manager</h2>
     {% if error %}
     <p class="text-red-500 text-center mb-4">{{ error }}</p>
     {% endif %}
     <form method="post" action="/admin/login">
         <div class="mb-4">
-            <label for="username" class="block text-gray-700 font-medium mb-2">Username</label>
-            <input type="text" id="username" name="username" class="w-full p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500" required>
+            <input type="text" id="username" name="username" placeholder="Enter username" class="w-full p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" required>
         </div>
         <div class="mb-6">
-            <label for="password" class="block text-gray-700 font-medium mb-2">Password</label>
-            <input type="password" id="password" name="password" class="w-full p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500" required>
+            <input type="password" id="password" name="password" placeholder="Enter password" class="w-full p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" required>
         </div>
-        <button type="submit" class="w-full bg-red-500 text-white p-3 rounded-lg hover:bg-red-600 transition duration-300">Login</button>
+        <button type="submit" class="w-full bg-blue-600 text-white p-3 rounded-lg hover:bg-blue-700 transition duration-300">Log</button>
     </form>
 </div>
 {% endblock %}

@@ -1,17 +1,21 @@
 /* User-specific styles */
 .bg-white {
-    background: linear-gradient(to bottom, #f0f9ff, #e0f2fe);
+    background: #ffffff; /* Pure white background for cards */
 }
 
 button {
-    background: #2563eb;
+    background: #2563eb; /* Blue button color */
 }
 
 button:hover {
-    background: #1d4ed8;
+    background: #1d4ed8; /* Darker blue on hover */
 }
 
 input:focus {
     border-color: #2563eb;
     box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+}
+
+table tr:hover {
+    background: #f0f9ff; /* Light blue on hover */
 }

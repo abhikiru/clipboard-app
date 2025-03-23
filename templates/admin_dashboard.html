@@ -1,11 +1,138 @@
-body {
-    font-family: 'Inter', sans-serif;
-}
+{% extends "base.html" %}
 
-header, footer {
-    background: linear-gradient(to right, #2563eb, #7c3aed);
-}
+{% block title %}Admin Dashboard{% endblock %}
 
-main {
-    flex: 1;
-}
+{% block css %}
+<link rel="stylesheet" href="/static/admin.css">
+<style>
+    body {
+        background: #1e3a8a; /* Blue background as in the image */
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="w-full max-w-5xl mx-auto mt-12">
+    <h2 class="text-2xl font-bold text-center text-white mb-6">Admin Dashboard</h2>
+    {% if error %}
+    <p class="text-red-500 text-center mb-4">{{ error }}</p>
+    {% endif %}
+    {% if success %}
+    <p class="text-green-500 text-center mb-4">{{ success }}</p>
+    {% endif %}
+
+    <!-- Update Admin Credentials -->
+    <div class="bg-white p-6 rounded-lg shadow-lg mb-8">
+        <h3 class="text-lg font-semibold text-gray-800 mb-4">Update Admin Credentials</h3>
+        <form method="post" action="/admin/update_admin">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                    <label for="admin_username" class="block text-gray-700 font-medium mb-2">Admin Username</label>
+                    <input type="text" id="admin_username" name="username" value="{{ admin.username }}" class="w-full p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" required>
+                </div>
+                <div>
+                    <label for="admin_password" class="block text-gray-700 font-medium mb-2">Admin Password</label>
+                    <input type="password" id="admin_password" name="password" value="{{ admin.password }}" class="w-full p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" required>
+                </div>
+            </div>
+            <button type="submit" class="w-full bg-blue-600 text-white p-3 rounded-lg hover:bg-blue-700 transition duration-300 mt-4">Update Admin Credentials</button>
+        </form>
+    </div>
+
+    <!-- Add New User -->
+    <div class="bg-white p-6 rounded-lg shadow-lg mb-8">
+        <h3 class="text-lg font-semibold text-gray-800 mb-4">Add New User</h3>
+        <form method="post" action="/admin/add_user">
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div>
+                    <label for="username" class="block text-gray-700 font-medium mb-2">Username</label>
+                    <input type="text" id="username" name="username" placeholder="Enter username" class="w-full p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" required>
+                </div>
+                <div>
+                    <label for="password" class="block text-gray-700 font-medium mb-2">Password</label>
+                    <input type="password" id="password" name="password" placeholder="Enter password" class="w-full p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" required>
+                </div>
+                <div>
+                    <label for="email" class="block text-gray-700 font-medium mb-2">Email</label>
+                    <input type="email" id="email" name="email" placeholder="Enter email" class="w-full p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" required>
+                </div>
+            </div>
+            <button type="submit" class="w-full bg-blue-600 text-white p-3 rounded-lg hover:bg-blue-700 transition duration-300 mt-4">Add User</button>
+        </form>
+    </div>
+
+    <!-- Manage Users -->
+    <div class="bg-white p-6 rounded-lg shadow-lg mb-8">
+        <h3 class="text-lg font-semibold text-gray-800 mb-4">Manage Users</h3>
+        {% if users %}
+        <div class="overflow-x-auto">
+            <table class="w-full border-collapse">
+                <thead>
+                    <tr class="bg-gray-200">
+                        <th class="p-3 text-left">Username</th>
+                        <th class="p-3 text-left">Email</th>
+                        <th class="p-3 text-left">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for user in users %}
+                    <tr class="border-b">
+                        <td class="p-3">{{ user.username }}</td>
+                        <td class="p-3">{{ user.email }}</td>
+                        <td class="p-3 flex space-x-2">
+                            <!-- Update User Form -->
+                            <form method="post" action="/admin/update_user/{{ user.id }}" class="inline">
+                                <input type="text" name="username" value="{{ user.username }}" class="p-2 border rounded-lg" required>
+                                <input type="password" name="password" value="{{ user.password }}" class="p-2 border rounded-lg" required>
+                                <input type="email" name="email" value="{{ user.email }}" class="p-2 border rounded-lg" required>
+                                <button type="submit" class="bg-blue-600 text-white px-3 py-1 rounded-lg hover:bg-blue-700 transition duration-300">Update</button>
+                            </form>
+                            <!-- Delete User Form -->
+                            <form method="post" action="/admin/delete_user/{{ user.id }}" onsubmit="return confirm('Are you sure you want to delete this user?');" class="inline">
+                                <button type="submit" class="bg-red-500 text-white px-3 py-1 rounded-lg hover:bg-red-600 transition duration-300">Delete</button>
+                            </form>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <p class="text-gray-600 text-center">No users found.</p>
+        {% endif %}
+    </div>
+
+    <!-- All Copied Texts -->
+    <div class="bg-white p-6 rounded-lg shadow-lg">
+        <h3 class="text-lg font-semibold text-gray-800 mb-4">All Copied Texts</h3>
+        {% if copied_texts %}
+        <div class="overflow-x-auto">
+            <table class="w-full border-collapse">
+                <thead>
+                    <tr class="bg-gray-200">
+                        <th class="p-3 text-left">User</th>
+                        <th class="p-3 text-left">Text</th>
+                        <th class="p-3 text-left">Timestamp</th>
+                        <th class="p-3 text-left">Action</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for text in copied_texts %}
+                    <tr class="border-b">
+                        <td class="p-3">{{ text.user.username }}</td>
+                        <td class="p-3">{{ text.text }}</td>
+                        <td class="p-3">{{ text.timestamp }}</td>
+                        <td class="p-3">
+                            <button onclick="copyToClipboard('{{ text.text }}')" class="bg-blue-600 text-white px-3 py-1 rounded-lg hover:bg-blue-700 transition duration-300">Copy</button>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <p class="text-gray-600 text-center">No copied texts found.</p>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}
