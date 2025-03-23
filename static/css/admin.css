@@ -1,0 +1,21 @@
+/* Admin-specific styles */
+.bg-white {
+    background: linear-gradient(to bottom, #fff1f2, #fee2e2);
+}
+
+button {
+    background: #ef4444;
+}
+
+button:hover {
+    background: #dc2626;
+}
+
+input:focus {
+    border-color: #ef4444;
+    box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.1);
+}
+
+table tr:hover {
+    background: #fef2f2;
+}

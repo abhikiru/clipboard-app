@@ -18,7 +18,6 @@ DATABASE_URL = os.getenv("DATABASE_URL")
 if not DATABASE_URL:
     raise ValueError("DATABASE_URL environment variable not set")
 
-# Fix postgres to postgresql in DATABASE_URL
 if DATABASE_URL.startswith("postgres://"):
     DATABASE_URL = "postgresql://" + DATABASE_URL[len("postgres://"):]
 
@@ -68,9 +67,9 @@ def get_db():
         db.close()
 
 
-# Owner credentials
-OWNER_USERNAME = "admin"
-OWNER_PASSWORD = "admin123"
+# Admin credentials
+ADMIN_USERNAME = "admin"
+ADMIN_PASSWORD = "admin123"
 
 
 # Routes
@@ -110,49 +109,76 @@ async def dashboard(request: Request, user_id: int, db: Session = Depends(get_db
         return RedirectResponse(url="/", status_code=303)
 
 
-@app.get("/owner", response_class=HTMLResponse)
-async def owner_login_page(request: Request):
-    return templates.TemplateResponse("owner_login.html", {"request": request})
+@app.get("/admin", response_class=HTMLResponse)
+async def admin_login_page(request: Request):
+    return templates.TemplateResponse("admin_login.html", {"request": request})
 
 
-@app.post("/owner/login", response_class=HTMLResponse)
-async def owner_login(request: Request, username: str = Form(...), password: str = Form(...)):
-    if username != OWNER_USERNAME or password != OWNER_PASSWORD:
-        return templates.TemplateResponse("owner_login.html",
-                                          {"request": request, "error": "Invalid owner credentials"})
+@app.post("/admin/login", response_class=HTMLResponse)
+async def admin_login(request: Request, username: str = Form(...), password: str = Form(...)):
+    if username != ADMIN_USERNAME or password != ADMIN_PASSWORD:
+        return templates.TemplateResponse("admin_login.html",
+                                          {"request": request, "error": "Invalid admin credentials"})
 
-    response = RedirectResponse(url="/owner/dashboard", status_code=303)
-    response.set_cookie(key="owner", value="true")
+    response = RedirectResponse(url="/admin/dashboard", status_code=303)
+    response.set_cookie(key="admin", value="true")
     return response
 
 
-@app.get("/owner/dashboard", response_class=HTMLResponse)
-async def owner_dashboard(request: Request):
-    if request.cookies.get("owner") != "true":
-        return RedirectResponse(url="/owner", status_code=303)
-    return templates.TemplateResponse("owner_dashboard.html", {"request": request})
+@app.get("/admin/dashboard", response_class=HTMLResponse)
+async def admin_dashboard(request: Request, db: Session = Depends(get_db)):
+    if request.cookies.get("admin") != "true":
+        return RedirectResponse(url="/admin", status_code=303)
+
+    users = db.query(User).all()
+    return templates.TemplateResponse("admin_dashboard.html", {"request": request, "users": users})
 
 
-@app.post("/owner/add_user", response_class=HTMLResponse)
+@app.post("/admin/add_user", response_class=HTMLResponse)
 async def add_user(request: Request, username: str = Form(...), password: str = Form(...), email: str = Form(...),
                    db: Session = Depends(get_db)):
-    if request.cookies.get("owner") != "true":
-        return RedirectResponse(url="/owner", status_code=303)
+    if request.cookies.get("admin") != "true":
+        return RedirectResponse(url="/admin", status_code=303)
 
     try:
         existing_user = db.query(User).filter(User.username == username).first()
         if existing_user:
-            return templates.TemplateResponse("owner_dashboard.html",
-                                              {"request": request, "error": "Username already exists"})
+            return templates.TemplateResponse("admin_dashboard.html",
+                                              {"request": request, "error": "Username already exists",
+                                               "users": db.query(User).all()})
 
         new_user = User(username=username, password=password, email=email)
         db.add(new_user)
         db.commit()
-        return templates.TemplateResponse("owner_dashboard.html",
-                                          {"request": request, "success": "User added successfully"})
+        return templates.TemplateResponse("admin_dashboard.html",
+                                          {"request": request, "success": "User added successfully",
+                                           "users": db.query(User).all()})
     except Exception as e:
         print(f"Add user error: {e}")
-        return templates.TemplateResponse("owner_dashboard.html", {"request": request, "error": "Failed to add user"})
+        return templates.TemplateResponse("admin_dashboard.html", {"request": request, "error": "Failed to add user",
+                                                                   "users": db.query(User).all()})
+
+
+@app.post("/admin/delete_user/{user_id}", response_class=HTMLResponse)
+async def delete_user(request: Request, user_id: int, db: Session = Depends(get_db)):
+    if request.cookies.get("admin") != "true":
+        return RedirectResponse(url="/admin", status_code=303)
+
+    try:
+        user = db.query(User).filter(User.id == user_id).first()
+        if not user:
+            return templates.TemplateResponse("admin_dashboard.html", {"request": request, "error": "User not found",
+                                                                       "users": db.query(User).all()})
+
+        db.delete(user)
+        db.commit()
+        return templates.TemplateResponse("admin_dashboard.html",
+                                          {"request": request, "success": "User deleted successfully",
+                                           "users": db.query(User).all()})
+    except Exception as e:
+        print(f"Delete user error: {e}")
+        return templates.TemplateResponse("admin_dashboard.html", {"request": request, "error": "Failed to delete user",
+                                                                   "users": db.query(User).all()})
 
 
 @app.post("/api/save_text")
