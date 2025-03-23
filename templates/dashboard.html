@@ -8,17 +8,20 @@
 </head>
 <body>
     <div class="container">
-        <h1>Welcome, {{ user.username }}</h1>
-        <h2>Copied Text History</h2>
-        {% if copied_texts %}
-        <ul>
-            {% for text in copied_texts %}
-            <li>{{ text.text }} (Copied at: {{ text.timestamp }})</li>
-            {% endfor %}
-        </ul>
-        {% else %}
-        <p>No copied text yet.</p>
-        {% endif %}
+        <h1>Clipboard App</h1>
+        <div class="card">
+            <h2>Welcome, {{ user.username }}</h2>
+            <h3>Copied Text History</h3>
+            {% if copied_texts %}
+            <ul class="text-list">
+                {% for text in copied_texts %}
+                <li>{{ text.text }} <span>(Copied at: {{ text.timestamp }})</span></li>
+                {% endfor %}
+            </ul>
+            {% else %}
+            <p>No copied text yet.</p>
+            {% endif %}
+        </div>
     </div>
 </body>
 </html>

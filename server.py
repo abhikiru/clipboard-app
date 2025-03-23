@@ -13,10 +13,22 @@ app = FastAPI()
 app.mount("/static", StaticFiles(directory="static"), name="static")
 templates = Jinja2Templates(directory="templates")
 
-# Database setup (Neon Postgres URL from environment variable)
+# Database setup
 DATABASE_URL = os.getenv("DATABASE_URL")
-engine = create_engine(DATABASE_URL)
-SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+if not DATABASE_URL:
+    raise ValueError("DATABASE_URL environment variable not set")
+
+# Fix postgres to postgresql in DATABASE_URL
+if DATABASE_URL.startswith("postgres://"):
+    DATABASE_URL = "postgresql://" + DATABASE_URL[len("postgres://"):]
+
+try:
+    engine = create_engine(DATABASE_URL, echo=True)
+    SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+except Exception as e:
+    print(f"Failed to connect to database: {e}")
+    raise e
+
 Base = declarative_base()
 
 
@@ -39,8 +51,12 @@ class CopiedText(Base):
     user = relationship("User", back_populates="copied_texts")
 
 
-# Create tables in the database
-Base.metadata.create_all(bind=engine)
+# Create tables
+try:
+    Base.metadata.create_all(bind=engine)
+except Exception as e:
+    print(f"Failed to create tables: {e}")
+    raise e
 
 
 # Dependency to get DB session
@@ -52,9 +68,9 @@ def get_db():
         db.close()
 
 
-# Hardcoded owner credentials (for now, we'll secure this later)
-OWNER_USERNAME = "owner"
-OWNER_PASSWORD = "owner123"
+# Owner credentials (you can change these)
+OWNER_USERNAME = "admin"
+OWNER_PASSWORD = "admin123"
 
 
 # Routes
@@ -65,25 +81,33 @@ async def login_page(request: Request):
 
 @app.post("/login", response_class=HTMLResponse)
 async def login(request: Request, username: str = Form(...), password: str = Form(...), db: Session = Depends(get_db)):
-    user = db.query(User).filter(User.username == username, User.password == password).first()
-    if not user:
-        return templates.TemplateResponse("index.html", {"request": request, "error": "Invalid username or password"})
+    try:
+        user = db.query(User).filter(User.username == username, User.password == password).first()
+        if not user:
+            return templates.TemplateResponse("index.html",
+                                              {"request": request, "error": "Invalid username or password"})
 
-    # Redirect to user dashboard
-    response = RedirectResponse(url=f"/dashboard/{user.id}", status_code=303)
-    response.set_cookie(key="user_id", value=str(user.id))
-    return response
+        response = RedirectResponse(url=f"/dashboard/{user.id}", status_code=303)
+        response.set_cookie(key="user_id", value=str(user.id))
+        return response
+    except Exception as e:
+        print(f"Login error: {e}")
+        return templates.TemplateResponse("index.html", {"request": request, "error": "An error occurred during login"})
 
 
 @app.get("/dashboard/{user_id}", response_class=HTMLResponse)
 async def dashboard(request: Request, user_id: int, db: Session = Depends(get_db)):
-    user = db.query(User).filter(User.id == user_id).first()
-    if not user:
-        return RedirectResponse(url="/", status_code=303)
+    try:
+        user = db.query(User).filter(User.id == user_id).first()
+        if not user:
+            return RedirectResponse(url="/", status_code=303)
 
-    copied_texts = db.query(CopiedText).filter(CopiedText.user_id == user_id).all()
-    return templates.TemplateResponse("dashboard.html",
-                                      {"request": request, "user": user, "copied_texts": copied_texts})
+        copied_texts = db.query(CopiedText).filter(CopiedText.user_id == user_id).all()
+        return templates.TemplateResponse("dashboard.html",
+                                          {"request": request, "user": user, "copied_texts": copied_texts})
+    except Exception as e:
+        print(f"Dashboard error: {e}")
+        return RedirectResponse(url="/", status_code=303)
 
 
 @app.get("/owner", response_class=HTMLResponse)
@@ -115,28 +139,33 @@ async def add_user(request: Request, username: str = Form(...), password: str = 
     if request.cookies.get("owner") != "true":
         return RedirectResponse(url="/owner", status_code=303)
 
-    # Check if user already exists
-    existing_user = db.query(User).filter(User.username == username).first()
-    if existing_user:
+    try:
+        existing_user = db.query(User).filter(User.username == username).first()
+        if existing_user:
+            return templates.TemplateResponse("owner_dashboard.html",
+                                              {"request": request, "error": "Username already exists"})
+
+        new_user = User(username=username, password=password, email=email)
+        db.add(new_user)
+        db.commit()
         return templates.TemplateResponse("owner_dashboard.html",
-                                          {"request": request, "error": "Username already exists"})
-
-    # Add new user
-    new_user = User(username=username, password=password, email=email)
-    db.add(new_user)
-    db.commit()
-    return templates.TemplateResponse("owner_dashboard.html",
-                                      {"request": request, "success": "User added successfully"})
+                                          {"request": request, "success": "User added successfully"})
+    except Exception as e:
+        print(f"Add user error: {e}")
+        return templates.TemplateResponse("owner_dashboard.html", {"request": request, "error": "Failed to add user"})
 
 
-# API endpoint for desktop app to save copied text (to be used later)
 @app.post("/api/save_text")
 async def save_text(user_id: int, text: str, db: Session = Depends(get_db)):
-    user = db.query(User).filter(User.id == user_id).first()
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found")
+    try:
+        user = db.query(User).filter(User.id == user_id).first()
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
 
-    new_text = CopiedText(user_id=user_id, text=text)
-    db.add(new_text)
-    db.commit()
-    return {"message": "Text saved successfully"}
+        new_text = CopiedText(user_id=user_id, text=text)
+        db.add(new_text)
+        db.commit()
+        return {"message": "Text saved successfully"}
+    except Exception as e:
+        print(f"Save text error: {e}")
+        raise HTTPException(status_code=500, detail="Failed to save text")
