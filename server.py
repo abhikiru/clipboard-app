@@ -67,9 +67,9 @@ def get_db():
         db.close()
 
 
-# Admin credentials
-ADMIN_USERNAME = "admin"
-ADMIN_PASSWORD = "admin123"
+# Admin credentials (Updated)
+ADMIN_USERNAME = "superadmin"
+ADMIN_PASSWORD = "securepass2025"
 
 
 # Routes
