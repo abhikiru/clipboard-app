@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Clipboard App</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+    <div id="login-section">
+        <h2>Login</h2>
+        <input type="text" id="username-input" placeholder="Username"><br>
+        <input type="password" id="password-input" placeholder="Password"><br>
+        <button id="login-btn">Login</button>
+        <p id="login-error" style="color: red;"></p>
+    </div>
+
+    <div id="main-content" style="display: none;">
+        <h2>Clipboard App</h2>
+        <p>Logged in as: <span id="logged-in-user"></span></p>
+
+        <div id="copied-text-section">
+            <h3>Copied Text History</h3>
+            <ul id="copied-text-list"></ul>
+        </div>
+    </div>
+
+    <script src="/static/js/script.js"></script>
+</body>
+</html>
