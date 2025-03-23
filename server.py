@@ -1,144 +1,142 @@
-from fastapi import FastAPI, Request, HTTPException
-from fastapi.responses import HTMLResponse
-from fastapi.staticfiles import StaticFiles
+from fastapi import FastAPI, Depends, HTTPException, Form, Request
+from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
-from fastapi.middleware.cors import CORSMiddleware
-import asyncpg
-from pydantic import BaseModel
-import logging
-from passlib.context import CryptContext
-import os
+from fastapi.staticfiles import StaticFiles
+from sqlalchemy import create_engine, Column, Integer, String, ForeignKey, DateTime
+from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.orm import sessionmaker, Session, relationship
 from datetime import datetime
+import os
 
-# Initialize FastAPI app
+# FastAPI app setup
 app = FastAPI()
-
-# Setup logging
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-logger = logging.getLogger("server")
-
-# Add CORS middleware
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
-# Mount static files
 app.mount("/static", StaticFiles(directory="static"), name="static")
 templates = Jinja2Templates(directory="templates")
 
-# Password hashing
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+# Database setup (Neon Postgres URL from environment variable)
+DATABASE_URL = os.getenv("DATABASE_URL")
+engine = create_engine(DATABASE_URL)
+SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+Base = declarative_base()
 
-# Database connection pool
-DATABASE_URL = os.getenv("DATABASE_URL")  # Vercel Postgres URL
 
-async def init_db():
+# Database Models
+class User(Base):
+    __tablename__ = "users"
+    id = Column(Integer, primary_key=True, index=True)
+    username = Column(String, unique=True, index=True)
+    password = Column(String)
+    email = Column(String, unique=True)
+    copied_texts = relationship("CopiedText", back_populates="user")
+
+
+class CopiedText(Base):
+    __tablename__ = "copied_text"
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"))
+    text = Column(String)
+    timestamp = Column(DateTime, default=datetime.utcnow)
+    user = relationship("User", back_populates="copied_texts")
+
+
+# Create tables in the database
+Base.metadata.create_all(bind=engine)
+
+
+# Dependency to get DB session
+def get_db():
+    db = SessionLocal()
     try:
-        # Connect to PostgreSQL
-        pool = await asyncpg.create_pool(DATABASE_URL)
-        async with pool.acquire() as conn:
-            # Create tables
-            await conn.execute('''
-                CREATE TABLE IF NOT EXISTS users (
-                    id SERIAL PRIMARY KEY,
-                    username TEXT UNIQUE NOT NULL,
-                    password TEXT NOT NULL,
-                    email TEXT,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                )
-            ''')
-            await conn.execute('''
-                CREATE TABLE IF NOT EXISTS copied_text_history (
-                    id SERIAL PRIMARY KEY,
-                    user_id INTEGER REFERENCES users(id),
-                    text TEXT NOT NULL,
-                    timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                )
-            ''')
-            await conn.execute('''
-                CREATE TABLE IF NOT EXISTS user_activity (
-                    id SERIAL PRIMARY KEY,
-                    user_id INTEGER REFERENCES users(id),
-                    action TEXT NOT NULL,
-                    timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                )
-            ''')
-        logger.info("[INFO] Database initialized successfully")
-        return pool
-    except Exception as e:
-        logger.error(f"[ERROR] Failed to initialize database: {e}")
-        raise
+        yield db
+    finally:
+        db.close()
 
-# Global database pool
-pool = None
 
-@app.on_event("startup")
-async def startup():
-    global pool
-    pool = await init_db()
+# Hardcoded owner credentials (for now, we'll secure this later)
+OWNER_USERNAME = "owner"
+OWNER_PASSWORD = "owner123"
 
-@app.on_event("shutdown")
-async def shutdown():
-    await pool.close()
 
-# Pydantic models
-class UserLogin(BaseModel):
-    username: str
-    password: str
-
-# API endpoint to login
-@app.post("/login")
-async def login(user: UserLogin):
-    logger.info(f"[INFO] Login attempt for user: {user.username}")
-    try:
-        async with pool.acquire() as conn:
-            # Check if user exists
-            result = await conn.fetchrow(
-                "SELECT * FROM users WHERE username = $1", user.username
-            )
-            if result:
-                # Verify password
-                if pwd_context.verify(user.password, result["password"]):
-                    logger.info(f"[INFO] User {user.username} logged in successfully")
-                    # Log user activity
-                    await conn.execute(
-                        "INSERT INTO user_activity (user_id, action, timestamp) VALUES ($1, $2, $3)",
-                        result["id"], "login", datetime.utcnow()
-                    )
-                    return {"status": "success", "message": "Login successful", "user_id": result["id"]}
-                else:
-                    logger.warning(f"[WARNING] Invalid password for user {user.username}")
-                    raise HTTPException(status_code=401, detail="Invalid credentials")
-            else:
-                logger.warning(f"[WARNING] User {user.username} not found")
-                raise HTTPException(status_code=404, detail="User not found")
-    except Exception as e:
-        logger.error(f"[ERROR] Exception occurred during login: {e}")
-        raise HTTPException(status_code=500, detail="Failed to process login")
-
-# API endpoint to fetch copied text history
-@app.get("/fetch-copied-text/{user_id}")
-async def fetch_copied_text(user_id: int):
-    logger.info(f"[INFO] Fetching copied text history for user_id: {user_id}")
-    try:
-        async with pool.acquire() as conn:
-            history_items = await conn.fetch(
-                "SELECT text FROM copied_text_history WHERE user_id = $1 ORDER BY timestamp DESC",
-                user_id
-            )
-            history_items = [item["text"] for item in history_items]
-            logger.info(f"[INFO] Copied text history fetched for user_id {user_id}: {history_items}")
-            return {"status": "success", "history": history_items}
-    except Exception as e:
-        logger.error(f"[ERROR] Exception occurred while fetching copied text history: {e}")
-        return {"status": "error", "message": "Failed to fetch copied text history"}
-
-# Serve the index.html file
+# Routes
 @app.get("/", response_class=HTMLResponse)
-async def serve_index(request: Request):
-    logger.info("[INFO] Serving index.html")
+async def login_page(request: Request):
     return templates.TemplateResponse("index.html", {"request": request})
+
+
+@app.post("/login", response_class=HTMLResponse)
+async def login(request: Request, username: str = Form(...), password: str = Form(...), db: Session = Depends(get_db)):
+    user = db.query(User).filter(User.username == username, User.password == password).first()
+    if not user:
+        return templates.TemplateResponse("index.html", {"request": request, "error": "Invalid username or password"})
+
+    # Redirect to user dashboard
+    response = RedirectResponse(url=f"/dashboard/{user.id}", status_code=303)
+    response.set_cookie(key="user_id", value=str(user.id))
+    return response
+
+
+@app.get("/dashboard/{user_id}", response_class=HTMLResponse)
+async def dashboard(request: Request, user_id: int, db: Session = Depends(get_db)):
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        return RedirectResponse(url="/", status_code=303)
+
+    copied_texts = db.query(CopiedText).filter(CopiedText.user_id == user_id).all()
+    return templates.TemplateResponse("dashboard.html",
+                                      {"request": request, "user": user, "copied_texts": copied_texts})
+
+
+@app.get("/owner", response_class=HTMLResponse)
+async def owner_login_page(request: Request):
+    return templates.TemplateResponse("owner_login.html", {"request": request})
+
+
+@app.post("/owner/login", response_class=HTMLResponse)
+async def owner_login(request: Request, username: str = Form(...), password: str = Form(...)):
+    if username != OWNER_USERNAME or password != OWNER_PASSWORD:
+        return templates.TemplateResponse("owner_login.html",
+                                          {"request": request, "error": "Invalid owner credentials"})
+
+    response = RedirectResponse(url="/owner/dashboard", status_code=303)
+    response.set_cookie(key="owner", value="true")
+    return response
+
+
+@app.get("/owner/dashboard", response_class=HTMLResponse)
+async def owner_dashboard(request: Request):
+    if request.cookies.get("owner") != "true":
+        return RedirectResponse(url="/owner", status_code=303)
+    return templates.TemplateResponse("owner_dashboard.html", {"request": request})
+
+
+@app.post("/owner/add_user", response_class=HTMLResponse)
+async def add_user(request: Request, username: str = Form(...), password: str = Form(...), email: str = Form(...),
+                   db: Session = Depends(get_db)):
+    if request.cookies.get("owner") != "true":
+        return RedirectResponse(url="/owner", status_code=303)
+
+    # Check if user already exists
+    existing_user = db.query(User).filter(User.username == username).first()
+    if existing_user:
+        return templates.TemplateResponse("owner_dashboard.html",
+                                          {"request": request, "error": "Username already exists"})
+
+    # Add new user
+    new_user = User(username=username, password=password, email=email)
+    db.add(new_user)
+    db.commit()
+    return templates.TemplateResponse("owner_dashboard.html",
+                                      {"request": request, "success": "User added successfully"})
+
+
+# API endpoint for desktop app to save copied text (to be used later)
+@app.post("/api/save_text")
+async def save_text(user_id: int, text: str, db: Session = Depends(get_db)):
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    new_text = CopiedText(user_id=user_id, text=text)
+    db.add(new_text)
+    db.commit()
+    return {"message": "Text saved successfully"}

@@ -3,16 +3,16 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Clipboard App - Login</title>
+    <title>Clipboard App - Owner Login</title>
     <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
     <div class="container">
-        <h1>Clipboard App - Login</h1>
+        <h1>Owner Login</h1>
         {% if error %}
         <p class="error">{{ error }}</p>
         {% endif %}
-        <form method="post" action="/login">
+        <form method="post" action="/owner/login">
             <label for="username">Username:</label>
             <input type="text" id="username" name="username" required>
             <label for="password">Password:</label>

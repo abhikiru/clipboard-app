@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Clipboard App - Dashboard</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <div class="container">
+        <h1>Welcome, {{ user.username }}</h1>
+        <h2>Copied Text History</h2>
+        {% if copied_texts %}
+        <ul>
+            {% for text in copied_texts %}
+            <li>{{ text.text }} (Copied at: {{ text.timestamp }})</li>
+            {% endfor %}
+        </ul>
+        {% else %}
+        <p>No copied text yet.</p>
+        {% endif %}
+    </div>
+</body>
+</html>

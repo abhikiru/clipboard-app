@@ -3,21 +3,27 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Clipboard App - Login</title>
+    <title>Clipboard App - Owner Dashboard</title>
     <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
     <div class="container">
-        <h1>Clipboard App - Login</h1>
+        <h1>Owner Dashboard</h1>
         {% if error %}
         <p class="error">{{ error }}</p>
         {% endif %}
-        <form method="post" action="/login">
+        {% if success %}
+        <p class="success">{{ success }}</p>
+        {% endif %}
+        <h2>Add New User</h2>
+        <form method="post" action="/owner/add_user">
             <label for="username">Username:</label>
             <input type="text" id="username" name="username" required>
             <label for="password">Password:</label>
             <input type="password" id="password" name="password" required>
-            <button type="submit">Login</button>
+            <label for="email">Email:</label>
+            <input type="email" id="email" name="email" required>
+            <button type="submit">Add User</button>
         </form>
     </div>
 </body>
