@@ -18,6 +18,10 @@ DATABASE_URL = os.getenv("DATABASE_URL")
 if not DATABASE_URL:
     raise ValueError("DATABASE_URL environment variable not set")
 
+# Ensure the URL uses 'postgresql' instead of 'postgres'
+if DATABASE_URL.startswith("postgres://"):
+    DATABASE_URL = "postgresql://" + DATABASE_URL[len("postgres://"):]
+
 try:
     engine = create_engine(DATABASE_URL, echo=True)  # echo=True for debugging
     SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
