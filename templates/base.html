@@ -17,12 +17,22 @@
             <nav>
                 {% if request.cookies.get("admin") == "true" %}
                 <a href="/admin/dashboard" class="text-white hover:underline">Admin Dashboard</a>
+                <span class="mx-2">|</span>
+                <a href="/user/login" class="text-white hover:underline">User Login</a>
+                <span class="mx-2">|</span>
+                <a href="/" class="text-white hover:underline">Home</a>
                 {% elif request.cookies.get("user_id") %}
                 <a href="/dashboard/{{ request.cookies.get('user_id') }}" class="text-white hover:underline">Dashboard</a>
+                <span class="mx-2">|</span>
+                <a href="/user/login" class="text-white hover:underline">User Login</a>
+                <span class="mx-2">|</span>
+                <a href="/" class="text-white hover:underline">Home</a>
                 {% else %}
-                <a href="/" class="text-white hover:underline">User Login</a>
+                <a href="/user/login" class="text-white hover:underline">User Login</a>
                 <span class="mx-2">|</span>
                 <a href="/admin" class="text-white hover:underline">Admin Login</a>
+                <span class="mx-2">|</span>
+                <a href="/" class="text-white hover:underline">Home</a>
                 {% endif %}
             </nav>
         </div>
