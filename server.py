@@ -1,3 +1,4 @@
+import os
 from fastapi import FastAPI, Form, Request, Depends, HTTPException
 from fastapi.responses import RedirectResponse, HTMLResponse
 from fastapi.templating import Jinja2Templates
@@ -16,8 +17,10 @@ app = FastAPI()
 # Add session middleware
 app.add_middleware(SessionMiddleware, secret_key="your-secret-key")  # Replace with a secure key
 
-# Database setup (replace with your Neon PostgreSQL URL)
-DATABASE_URL = "postgresql://neondb_owner:npg_OhQR57ypVXH@ep-misty-leaf-a5xvgk2g-pooler.us-east-2.aws.neon.tech/neondb?sslmode=require"
+# Database setup (load from environment variable)
+DATABASE_URL = os.getenv("DATABASE_URL")
+if not DATABASE_URL:
+    raise ValueError("DATABASE_URL environment variable not set")
 engine = create_engine(DATABASE_URL)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
