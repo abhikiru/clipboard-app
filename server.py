@@ -268,6 +268,59 @@ async def update_user(request: Request):
         db.close()
 
 
+@app.post("/admin/delete_user")
+async def delete_user(request: Request):
+    if request.session.get("user", {}).get("role") != "admin":
+        print("Delete user access denied: Not authorized")
+        raise HTTPException(status_code=403, detail="Not authorized")
+
+    form = await request.form()
+    user_id = form.get("user_id")
+    current_user = request.session.get("user", {}).get("username")
+
+    print(f"Deleting user - ID: {user_id}")
+
+    db = SessionLocal()
+    try:
+        # Get the user to be deleted
+        user_to_delete = db.execute(users.select().where(users.c.id == user_id)).fetchone()
+        if not user_to_delete:
+            print(f"Delete user failed: User ID '{user_id}' not found")
+            return templates.TemplateResponse("admin_dashboard.html", {
+                "request": request,
+                "users": get_all_users(db),
+                "message": "User not found"
+            })
+
+        # Prevent the current admin from deleting themselves
+        if user_to_delete.username == current_user:
+            print(f"Delete user failed: Cannot delete the current admin '{current_user}'")
+            return templates.TemplateResponse("admin_dashboard.html", {
+                "request": request,
+                "users": get_all_users(db),
+                "message": "Cannot delete your own account"
+            })
+
+        # Delete the user
+        db.execute(users.delete().where(users.c.id == user_id))
+        db.commit()
+        print(f"User '{user_to_delete.username}' deleted successfully")
+        return templates.TemplateResponse("admin_dashboard.html", {
+            "request": request,
+            "users": get_all_users(db),
+            "message": f"User '{user_to_delete.username}' deleted successfully"
+        })
+    except Exception as e:
+        print(f"Error deleting user: {e}")
+        return templates.TemplateResponse("admin_dashboard.html", {
+            "request": request,
+            "users": get_all_users(db),
+            "message": "Error deleting user"
+        })
+    finally:
+        db.close()
+
+
 @app.get("/user/login", response_class=HTMLResponse)
 async def user_login_page(request: Request, error: str = None):
     print("Serving user login page")
