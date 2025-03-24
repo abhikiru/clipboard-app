@@ -1,6 +1,17 @@
 {% extends "base.html" %}
 {% block content %}
 <h2 class="text-xl">Admin Dashboard</h2>
+{% if error %}
+<p class="text-red-500 mb-4">{{ error }}</p>
+{% endif %}
+<div class="mb-4">
+    <h3>Update Admin Credentials</h3>
+    <form method="post" action="/admin/update_admin" class="flex space-x-2">
+        <input type="text" name="new_username" placeholder="New Username" value="{{ admin.username }}" class="border p-2 text-black">
+        <input type="password" name="new_password" placeholder="New Password" class="border p-2 text-black">
+        <button type="submit" class="bg-blue-700 p-2 rounded hover:bg-blue-800">Update</button>
+    </form>
+</div>
 <div class="mb-4">
     <h3>Add New User</h3>
     <form method="post" action="/admin/add_user" class="flex space-x-2">

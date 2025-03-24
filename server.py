@@ -15,6 +15,7 @@ engine = create_engine(DATABASE_URL)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
 
+
 # Models
 class User(Base):
     __tablename__ = "users"
@@ -24,6 +25,7 @@ class User(Base):
     hashed_password = Column(String)
     copied_texts = relationship("CopiedText", back_populates="user")
 
+
 class CopiedText(Base):
     __tablename__ = "copied_texts"
     id = Column(Integer, primary_key=True, index=True)
@@ -31,11 +33,13 @@ class CopiedText(Base):
     user_id = Column(Integer, ForeignKey("users.id"))
     user = relationship("User", back_populates="copied_texts")
 
+
 class Admin(Base):
     __tablename__ = "admins"
     id = Column(Integer, primary_key=True, index=True)
     username = Column(String, unique=True, index=True)
     hashed_password = Column(String)
+
 
 Base.metadata.create_all(bind=engine)
 
@@ -47,12 +51,15 @@ templates = Jinja2Templates(directory="templates")
 # Password hashing
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
+
 # Helper functions
 def get_password_hash(password):
     return pwd_context.hash(password)
 
+
 def verify_password(plain_password, hashed_password):
     return pwd_context.verify(plain_password, hashed_password)
+
 
 def get_db():
     db = SessionLocal()
@@ -60,6 +67,7 @@ def get_db():
         yield db
     finally:
         db.close()
+
 
 # Initialize default admin
 def initialize_admin(db):
@@ -69,6 +77,7 @@ def initialize_admin(db):
         new_admin = Admin(username="superadmin", hashed_password=hashed_password)
         db.add(new_admin)
         db.commit()
+
 
 # Middleware for session expiry
 @app.middleware("http")
@@ -83,39 +92,60 @@ async def check_session_expiry(request: Request, call_next):
             return response
     return await call_next(request)
 
+
 # Routes
 @app.get("/", response_class=HTMLResponse)
 async def landing_page(request: Request):
     return templates.TemplateResponse("landing.html", {"request": request})
 
+
 @app.get("/user/login", response_class=HTMLResponse)
 async def user_login_get(request: Request):
     return templates.TemplateResponse("index.html", {"request": request})
 
+
 @app.post("/user/login")
-async def user_login_post(request: Request, username: str = Form(...), password: str = Form(...), db: Session = Depends(get_db)):
+async def user_login_post(request: Request, username: str = Form(...), password: str = Form(...),
+                          db: Session = Depends(get_db)):
+    # Check if the username belongs to a user
     user = db.query(User).filter(User.username == username).first()
-    if not user or not verify_password(password, user.hashed_password):
-        return templates.TemplateResponse("index.html", {"request": request, "error": "Invalid credentials"})
-    response = RedirectResponse(url=f"/dashboard/{user.id}", status_code=303)
-    response.set_cookie(key="user_id", value=user.id, httponly=True, secure=True, samesite="strict")
-    response.set_cookie(key="user_id_expiry", value=int(time.time()) + 1800, httponly=True, secure=True, samesite="strict")
-    return response
+    if user and verify_password(password, user.hashed_password):
+        response = RedirectResponse(url=f"/dashboard/{user.id}", status_code=303)
+        response.set_cookie(key="user_id", value=user.id, httponly=True, secure=True, samesite="strict")
+        response.set_cookie(key="user_id_expiry", value=int(time.time()) + 1800, httponly=True, secure=True,
+                            samesite="strict")
+        return response
+
+    # Check if the username belongs to an admin
+    admin = db.query(Admin).filter(Admin.username == username).first()
+    if admin and verify_password(password, admin.hashed_password):
+        response = RedirectResponse(url=f"/admin/dashboard", status_code=303)
+        response.set_cookie(key="admin", value=admin.id, httponly=True, secure=True, samesite="strict")
+        response.set_cookie(key="admin_expiry", value=int(time.time()) + 1800, httponly=True, secure=True,
+                            samesite="strict")
+        return response
+
+    return templates.TemplateResponse("index.html", {"request": request, "error": "Invalid credentials"})
+
 
 @app.get("/admin", response_class=HTMLResponse)
 async def admin_login_get(request: Request):
     return templates.TemplateResponse("admin_login.html", {"request": request})
 
+
 @app.post("/admin/login")
-async def admin_login_post(request: Request, username: str = Form(...), password: str = Form(...), db: Session = Depends(get_db)):
+async def admin_login_post(request: Request, username: str = Form(...), password: str = Form(...),
+                           db: Session = Depends(get_db)):
     initialize_admin(db)
     admin = db.query(Admin).filter(Admin.username == username).first()
     if not admin or not verify_password(password, admin.hashed_password):
         return templates.TemplateResponse("admin_login.html", {"request": request, "error": "Invalid credentials"})
     response = RedirectResponse(url="/admin/dashboard", status_code=303)
     response.set_cookie(key="admin", value=admin.id, httponly=True, secure=True, samesite="strict")
-    response.set_cookie(key="admin_expiry", value=int(time.time()) + 1800, httponly=True, secure=True, samesite="strict")
+    response.set_cookie(key="admin_expiry", value=int(time.time()) + 1800, httponly=True, secure=True,
+                        samesite="strict")
     return response
+
 
 @app.get("/dashboard/{user_id}", response_class=HTMLResponse)
 async def dashboard(request: Request, user_id: int, page: int = 1, db: Session = Depends(get_db)):
@@ -133,8 +163,13 @@ async def dashboard(request: Request, user_id: int, page: int = 1, db: Session =
         "total_pages": total_pages
     })
 
+
 @app.get("/admin/dashboard", response_class=HTMLResponse)
 async def admin_dashboard(request: Request, search: str = "", page: int = 1, db: Session = Depends(get_db)):
+    admin_id = request.cookies.get("admin")
+    if not admin_id:
+        raise HTTPException(status_code=403, detail="Not authorized")
+    admin = db.query(Admin).filter(Admin.id == admin_id).first()
     query = db.query(CopiedText)
     if search:
         query = query.join(User).filter(
@@ -146,12 +181,14 @@ async def admin_dashboard(request: Request, search: str = "", page: int = 1, db:
     users = db.query(User).all()
     return templates.TemplateResponse("admin_dashboard.html", {
         "request": request,
+        "admin": admin,
         "users": users,
         "copied_texts": copied_texts,
         "search": search,
         "page": page,
         "total_pages": total_pages
     })
+
 
 @app.post("/api/save_text")
 async def save_text(request: Request, text: str = Form(...), db: Session = Depends(get_db)):
@@ -163,12 +200,14 @@ async def save_text(request: Request, text: str = Form(...), db: Session = Depen
     db.commit()
     return {"status": "success"}
 
+
 @app.get("/user/logout")
 async def user_logout():
     response = RedirectResponse(url="/", status_code=303)
     response.delete_cookie("user_id")
     response.delete_cookie("user_id_expiry")
     return response
+
 
 @app.get("/admin/logout")
 async def admin_logout():
@@ -177,15 +216,78 @@ async def admin_logout():
     response.delete_cookie("admin_expiry")
     return response
 
+
 @app.post("/admin/add_user")
-async def add_user(request: Request, username: str = Form(...), email: str = Form(...), password: str = Form(...), db: Session = Depends(get_db)):
-    if not (3 <= len(username) <= 20 and username.isalnum()) or not (8 <= len(password) <= 50 and any(c.isalpha() for c in password) and any(c.isdigit() for c in password)):
-        raise HTTPException(status_code=400, detail="Invalid input")
+async def add_user(request: Request, username: str = Form(...), email: str = Form(...), password: str = Form(...),
+                   db: Session = Depends(get_db)):
+    # Check if username is unique across both users and admins
+    if db.query(User).filter(User.username == username).first() or db.query(Admin).filter(
+            Admin.username == username).first():
+        return templates.TemplateResponse("admin_dashboard.html", {
+            "request": request,
+            "error": "Username already exists",
+            "users": db.query(User).all(),
+            "copied_texts": db.query(CopiedText).offset(0).limit(10).all(),
+            "search": "",
+            "page": 1,
+            "total_pages": 1
+        })
+    if not (3 <= len(username) <= 20 and username.isalnum()) or not (
+            8 <= len(password) <= 50 and any(c.isalpha() for c in password) and any(c.isdigit() for c in password)):
+        return templates.TemplateResponse("admin_dashboard.html", {
+            "request": request,
+            "error": "Invalid input: Username must be 3-20 alphanumeric characters, password must be 8-50 characters with letters and numbers",
+            "users": db.query(User).all(),
+            "copied_texts": db.query(CopiedText).offset(0).limit(10).all(),
+            "search": "",
+            "page": 1,
+            "total_pages": 1
+        })
     hashed_password = get_password_hash(password)
     new_user = User(username=username, email=email, hashed_password=hashed_password)
     db.add(new_user)
     db.commit()
     return RedirectResponse(url="/admin/dashboard", status_code=303)
+
+
+@app.post("/admin/update_admin")
+async def update_admin(request: Request, new_username: str = Form(...), new_password: str = Form(...),
+                       db: Session = Depends(get_db)):
+    admin_id = request.cookies.get("admin")
+    if not admin_id:
+        raise HTTPException(status_code=403, detail="Not authorized")
+    admin = db.query(Admin).filter(Admin.id == admin_id).first()
+    # Check if new username is unique
+    if (db.query(User).filter(User.username == new_username).first() or
+            db.query(Admin).filter(Admin.username == new_username, Admin.id != admin_id).first()):
+        return templates.TemplateResponse("admin_dashboard.html", {
+            "request": request,
+            "error": "Username already exists",
+            "admin": admin,
+            "users": db.query(User).all(),
+            "copied_texts": db.query(CopiedText).offset(0).limit(10).all(),
+            "search": "",
+            "page": 1,
+            "total_pages": 1
+        })
+    if not (3 <= len(new_username) <= 20 and new_username.isalnum()) or not (
+            8 <= len(new_password) <= 50 and any(c.isalpha() for c in new_password) and any(
+            c.isdigit() for c in new_password)):
+        return templates.TemplateResponse("admin_dashboard.html", {
+            "request": request,
+            "error": "Invalid input: Username must be 3-20 alphanumeric characters, password must be 8-50 characters with letters and numbers",
+            "admin": admin,
+            "users": db.query(User).all(),
+            "copied_texts": db.query(CopiedText).offset(0).limit(10).all(),
+            "search": "",
+            "page": 1,
+            "total_pages": 1
+        })
+    admin.username = new_username
+    admin.hashed_password = get_password_hash(new_password)
+    db.commit()
+    return RedirectResponse(url="/admin/dashboard", status_code=303)
+
 
 @app.post("/admin/delete_user/{user_id}")
 async def delete_user(user_id: int, db: Session = Depends(get_db)):
@@ -195,6 +297,7 @@ async def delete_user(user_id: int, db: Session = Depends(get_db)):
     db.delete(user)
     db.commit()
     return RedirectResponse(url="/admin/dashboard", status_code=303)
+
 
 @app.post("/admin/delete_text/{text_id}")
 async def delete_text(text_id: int, db: Session = Depends(get_db)):

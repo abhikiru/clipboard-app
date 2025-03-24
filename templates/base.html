@@ -15,8 +15,10 @@
         {% block content %}{% endblock %}
     </main>
     <footer class="p-4 flex space-x-4">
+        {% if request.url.path.startswith('/dashboard') %}
         <button id="clipboard-manager-btn" class="bg-blue-700 p-2 rounded hover:bg-blue-800">Clipboard Manager</button>
         <button id="copied-text-viewer-btn" class="bg-blue-700 p-2 rounded hover:bg-blue-800">Copied Text Viewer</button>
+        {% endif %}
         {% if request.cookies.get("user_id") %}
         <a href="/user/logout" class="bg-red-700 p-2 rounded hover:bg-red-800">Logout</a>
         {% elif request.cookies.get("admin") %}
