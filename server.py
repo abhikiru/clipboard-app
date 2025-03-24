@@ -114,7 +114,7 @@ async def admin_dashboard(request: Request, db: Session = Depends(get_db)):
         return RedirectResponse(url="/admin", status_code=303)
     # Fetch some data for the dashboard (e.g., all users)
     users = db.query(User).all()
-    return templates.TemplateResponse("user_login.html", {"request": request, "users": users})
+    return templates.TemplateResponse("admin_dashboard.html", {"request": request, "users": users})
 
 # Admin logout
 @app.get("/admin/logout")
@@ -149,7 +149,14 @@ async def user_dashboard(request: Request, db: Session = Depends(get_db)):
     copied_texts = db.query(CopiedText).filter(CopiedText.user_id == user_id).all()
     return templates.TemplateResponse("user_dashboard.html", {"request": request, "user": user, "copied_texts": copied_texts})
 
-# User registration (optional, if you want to allow registration)
+# User logout
+@app.get("/user/logout")
+async def user_logout(request: Request):
+    request.session.pop("user", None)
+    request.session.pop("last_activity", None)
+    return RedirectResponse(url="/user/login", status_code=303)
+
+# User registration (optional)
 @app.post("/user/register")
 async def register_user(username: str = Form(...), email: str = Form(...), password: str = Form(...), db: Session = Depends(get_db)):
     existing_user = db.query(User).filter(User.username == username).first()
@@ -160,7 +167,7 @@ async def register_user(username: str = Form(...), email: str = Form(...), passw
     db.commit()
     return RedirectResponse(url="/user/login", status_code=303)
 
-# Example: Initialize admin (run this once to create an admin if needed)
+# Initialize admin on startup (if needed)
 @app.on_event("startup")
 async def startup_event():
     db = SessionLocal()
