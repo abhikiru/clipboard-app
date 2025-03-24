@@ -3,17 +3,16 @@
 {% block title %}Admin Login{% endblock %}
 
 {% block css %}
-<link rel="stylesheet" href="/static/admin.css">
 <style>
     body {
-        background: #1e3a8a; /* Blue background as in the image */
+        background: #1e3a8a; /* Blue background */
     }
 </style>
 {% endblock %}
 
 {% block content %}
 <div class="bg-white p-6 rounded-lg shadow-lg w-full max-w-sm mx-auto mt-12">
-    <h2 class="text-xl font-bold text-center text-gray-800 mb-6">Login to Clipboard Manager</h2>
+    <h2 class="text-xl font-bold text-center text-gray-800 mb-6">Admin Login</h2>
     {% if error %}
     <p class="text-red-500 text-center mb-4">{{ error }}</p>
     {% endif %}
@@ -24,7 +23,7 @@
         <div class="mb-6">
             <input type="password" id="password" name="password" placeholder="Enter password" class="w-full p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" required>
         </div>
-        <button type="submit" class="w-full bg-blue-600 text-white p-3 rounded-lg hover:bg-blue-700 transition duration-300">Log</button>
+        <button type="submit" class="w-full bg-blue-600 text-white p-3 rounded-lg hover:bg-blue-700 transition duration-300">Log In</button>
     </form>
 </div>
 {% endblock %}

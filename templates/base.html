@@ -9,7 +9,7 @@
     <link rel="icon" href="/static/favicon.ico" type="image/x-icon">
     {% block css %}{% endblock %}
 </head>
-<body class="bg-gray-100 min-h-screen flex flex-col">
+<body class="min-h-screen flex flex-col">
     <!-- Header -->
     <header class="bg-blue-600 text-white p-4 shadow-md">
         <div class="container mx-auto flex justify-between items-center">
@@ -20,11 +20,15 @@
                 <span class="mx-2">|</span>
                 <a href="/user/login" class="text-white hover:underline">User Login</a>
                 <span class="mx-2">|</span>
+                <a href="/admin/logout" class="text-white hover:underline">Logout</a>
+                <span class="mx-2">|</span>
                 <a href="/" class="text-white hover:underline">Home</a>
                 {% elif request.cookies.get("user_id") %}
                 <a href="/dashboard/{{ request.cookies.get('user_id') }}" class="text-white hover:underline">Dashboard</a>
                 <span class="mx-2">|</span>
                 <a href="/user/login" class="text-white hover:underline">User Login</a>
+                <span class="mx-2">|</span>
+                <a href="/user/logout" class="text-white hover:underline">Logout</a>
                 <span class="mx-2">|</span>
                 <a href="/" class="text-white hover:underline">Home</a>
                 {% else %}

@@ -1,63 +1,87 @@
-function copyToClipboard(text) {
-    navigator.clipboard.writeText(text).then(() => {
-        alert("Text copied to clipboard!");
-    }).catch(err => {
-        console.error("Failed to copy text: ", err);
-    });
-}
+document.addEventListener("DOMContentLoaded", () => {
+    // Elements for Clipboard Manager
+    const clipboardTextArea = document.getElementById("clipboard-text");
+    const copyToClipboardBtn = document.getElementById("copy-to-clipboard-btn");
 
-// Clipboard Manager: Prompt for text and copy to system clipboard
-document.getElementById("clipboard-manager-btn").addEventListener("click", () => {
-    const text = prompt("Enter text to copy to clipboard:");
-    if (text) {
-        navigator.clipboard.writeText(text).then(() => {
-            alert("Text copied to clipboard!");
-        }).catch(err => {
-            console.error("Failed to copy text: ", err);
-            alert("Failed to copy text.");
+    // Elements for Copied Text Viewer
+    const pastedTextArea = document.getElementById("pasted-text");
+    const savePastedTextBtn = document.getElementById("save-pasted-text-btn");
+
+    // Footer buttons
+    const clipboardManagerBtn = document.getElementById("clipboard-manager-btn");
+    const copiedTextViewerBtn = document.getElementById("copied-text-viewer-btn");
+
+    // Sections to toggle
+    const clipboardManagerSection = document.querySelector(".bg-white:has(#clipboard-text)");
+    const copiedTextViewerSection = document.querySelector(".bg-white:has(#pasted-text)");
+
+    // Check if we're on the user dashboard (by checking if clipboardTextArea exists)
+    if (clipboardTextArea && copyToClipboardBtn) {
+        // Copy to Clipboard functionality
+        copyToClipboardBtn.addEventListener("click", () => {
+            const text = clipboardTextArea.value.trim();
+            if (text) {
+                navigator.clipboard.writeText(text)
+                    .then(() => {
+                        alert("Text copied to clipboard!");
+                        clipboardTextArea.value = ""; // Clear the textarea
+                    })
+                    .catch(err => {
+                        console.error("Failed to copy text: ", err);
+                        alert("Failed to copy text to clipboard.");
+                    });
+            } else {
+                alert("Please enter some text to copy.");
+            }
         });
     }
-});
 
-// Copied Text Viewer: Show the paste area and save pasted text
-document.getElementById("copied-text-viewer-btn").addEventListener("click", () => {
-    const pasteArea = document.getElementById("paste-text");
-    if (pasteArea) {
-        pasteArea.focus();
-        pasteArea.scrollIntoView({ behavior: "smooth" });
-    } else {
-        alert("Please go to the dashboard to paste copied text.");
-    }
-});
+    // Save Pasted Text functionality
+    if (pastedTextArea && savePastedTextBtn) {
+        savePastedTextBtn.addEventListener("click", () => {
+            const text = pastedTextArea.value.trim();
+            const userId = savePastedTextBtn.getAttribute("data-user-id");
 
-// Save Pasted Text to Database
-document.getElementById("save-pasted-text")?.addEventListener("click", async () => {
-    const userId = document.cookie.split('; ').find(row => row.startsWith('user_id='))?.split('=')[1];
-    const text = document.getElementById("paste-text").value;
-
-    if (!userId) {
-        alert("Please log in to save pasted text.");
-        return;
-    }
-
-    if (!text) {
-        alert("Please paste some text to save.");
-        return;
-    }
-
-    try {
-        const response = await fetch("/api/save_text", {
-            method: "POST",
-            headers: {
-                "Content-Type": "application/json",
-            },
-            body: JSON.stringify({ user_id: parseInt(userId), text: text }),
+            if (text && userId) {
+                fetch("/api/save_text", {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                    },
+                    body: JSON.stringify({ user_id: parseInt(userId), text: text }),
+                })
+                    .then(response => response.json())
+                    .then(data => {
+                        alert(data.message);
+                        pastedTextArea.value = ""; // Clear the textarea
+                        location.reload(); // Reload the page to update the copied text history
+                    })
+                    .catch(err => {
+                        console.error("Failed to save text: ", err);
+                        alert("Failed to save the pasted text.");
+                    });
+            } else {
+                alert("Please paste some text to save.");
+            }
         });
-        const result = await response.json();
-        alert(result.message);
-        window.location.reload(); // Refresh to show the new text
-    } catch (err) {
-        console.error("Failed to save text: ", err);
-        alert("Failed to save text.");
+    }
+
+    // Toggle visibility of sections using footer buttons (only on user dashboard)
+    if (clipboardManagerBtn && copiedTextViewerBtn && clipboardManagerSection && copiedTextViewerSection) {
+        // Initially hide both sections
+        clipboardManagerSection.style.display = "none";
+        copiedTextViewerSection.style.display = "none";
+
+        // Show Clipboard Manager section
+        clipboardManagerBtn.addEventListener("click", () => {
+            clipboardManagerSection.style.display = "block";
+            copiedTextViewerSection.style.display = "none";
+        });
+
+        // Show Copied Text Viewer section
+        copiedTextViewerBtn.addEventListener("click", () => {
+            clipboardManagerSection.style.display = "none";
+            copiedTextViewerSection.style.display = "block";
+        });
     }
 });
