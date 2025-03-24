@@ -4,15 +4,28 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Clipboard Manager</title>
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="/static/css/styles.css">
     <link rel="icon" href="/static/favicon.ico">
 </head>
 <body>
-    <div class="container">
-        <h1>Welcome to Clipboard Manager</h1>
-        <p><a href="/user/login">User Login</a></p>
-        <p><a href="/admin">Admin Login</a></p>
-        <p><a href="/downloads/ClipboardManager.exe" download>Download Clipboard Manager for Windows</a></p>
-    </div>
+    <header>
+        <h1>Clipboard Manager</h1>
+        <p>Manage your clipboard with ease</p>
+    </header>
+
+    <main>
+        <div class="login-section">
+            <h2>Welcome to Clipboard Manager</h2>
+            <div class="button-group">
+                <a href="/user/login" class="nav-button">User Login</a>
+                <a href="/admin" class="nav-button">Admin Login</a>
+            </div>
+        </div>
+    </main>
+
+    <footer>
+        <p>Made by Abhishek Sharma</p>
+    </footer>
 </body>
 </html>

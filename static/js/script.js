@@ -1,167 +1,195 @@
-// Function to fetch history
-function fetchHistory(username) {
-    fetch(`/fetch-history/${username}`)
-        .then(response => response.json())
-        .then(data => {
-            if (data.status === 'success') {
-                const historyList = document.getElementById('historyList');
-                historyList.innerHTML = '';
-                data.history.forEach(item => {
-                    const li = document.createElement('li');
-                    li.textContent = item;
-                    const deleteButton = document.createElement('button');
-                    deleteButton.textContent = 'Delete';
-                    deleteButton.className = 'delete';
-                    deleteButton.onclick = () => deleteHistoryItem(item, username);
-                    li.appendChild(deleteButton);
-                    historyList.appendChild(li);
-                });
-            } else {
-                alert('Error fetching history: ' + data.message);
-            }
-        })
-        .catch(error => {
-            alert('Error: ' + error);
-        });
+// DOM Elements
+const textInput = document.getElementById('text-input');
+const actionMode = document.getElementById('action-mode');
+const submitBtn = document.getElementById('submit-btn');
+const historyList = document.getElementById('history-list');
+const clearHistoryBtn = document.getElementById('clear-history');
+const clipboardManagerSection = document.getElementById('clipboard-manager-section');
+const copiedTextSection = document.getElementById('copied-text-section');
+const copiedTextList = document.getElementById('copied-text-list');
+const clearCopiedTextBtn = document.getElementById('clear-copied-text');
+const clipboardManagerBtn = document.getElementById('clipboard-manager-btn');
+const copiedTextBtn = document.getElementById('copied-text-btn');
+
+let pollingInterval = null;
+const username = document.querySelector('header p').textContent.split(': ')[1];
+
+// Toggle Sections
+function showClipboardManager() {
+    clipboardManagerSection.style.display = 'block';
+    copiedTextSection.style.display = 'none';
+    clipboardManagerBtn.classList.add('active');
+    copiedTextBtn.classList.remove('active');
+    if (pollingInterval) {
+        clearInterval(pollingInterval);
+        pollingInterval = null;
+    }
 }
 
-// Function to fetch copied text history
-function fetchCopiedText(username) {
-    fetch(`/fetch-copied-text/${username}`)
-        .then(response => response.json())
-        .then(data => {
-            if (data.status === 'success') {
-                const copiedTextList = document.getElementById('copiedTextList');
-                copiedTextList.innerHTML = '';
-                data.history.forEach(item => {
-                    const li = document.createElement('li');
-                    li.textContent = item;
-                    const deleteButton = document.createElement('button');
-                    deleteButton.textContent = 'Delete';
-                    deleteButton.className = 'delete';
-                    deleteButton.onclick = () => deleteCopiedTextItem(item, username);
-                    li.appendChild(deleteButton);
-                    copiedTextList.appendChild(li);
-                });
-            } else {
-                alert('Error fetching copied text: ' + data.message);
-            }
-        })
-        .catch(error => {
-            alert('Error: ' + error);
-        });
+function showCopiedText() {
+    clipboardManagerSection.style.display = 'none';
+    copiedTextSection.style.display = 'block';
+    clipboardManagerBtn.classList.remove('active');
+    copiedTextBtn.classList.add('active');
+    loadCopiedText();
+    if (!pollingInterval) {
+        pollingInterval = setInterval(loadCopiedText, 2000);
+    }
 }
 
-// Function to submit new text
-function submitText(username) {
-    const text = document.getElementById('textInput').value.trim();
+clipboardManagerBtn.addEventListener('click', showClipboardManager);
+copiedTextBtn.addEventListener('click', showCopiedText);
+
+// Load history (Clipboard Manager)
+async function loadHistory() {
+    try {
+        const response = await fetch(`/fetch-history/${username}`);
+        const data = await response.json();
+        if (data.status === 'success') {
+            historyList.innerHTML = '';
+            data.history.forEach(item => addToHistory(item));
+        }
+    } catch (error) {
+        console.error('Error loading history:', error);
+    }
+}
+
+// Load copied text history
+async function loadCopiedText() {
+    try {
+        const response = await fetch(`/fetch-copied-text/${username}`);
+        const data = await response.json();
+        if (data.status === 'success') {
+            copiedTextList.innerHTML = '';
+            if (data.history.length === 0) {
+                const emptyItem = document.createElement('li');
+                emptyItem.textContent = 'No copied text yet...';
+                emptyItem.className = 'text-gray-500';
+                copiedTextList.appendChild(emptyItem);
+            } else {
+                data.history.forEach(item => addToCopiedText(item));
+            }
+        }
+    } catch (error) {
+        console.error('Error loading copied text history:', error);
+    }
+}
+
+// Add to Clipboard Manager History
+function addToHistory(text) {
+    const listItem = document.createElement('li');
+    listItem.className = 'history-item';
+
+    const textSpan = document.createElement('span');
+    textSpan.textContent = text;
+    listItem.appendChild(textSpan);
+
+    const copyBtn = document.createElement('button');
+    copyBtn.textContent = 'Copy';
+    copyBtn.className = 'copy-btn';
+    copyBtn.addEventListener('click', () => {
+        navigator.clipboard.writeText(text).then(() => {
+            alert('Text copied to clipboard!');
+        });
+    });
+    listItem.appendChild(copyBtn);
+
+    const deleteBtn = document.createElement('button');
+    deleteBtn.textContent = '✕';
+    deleteBtn.className = 'delete-btn';
+    deleteBtn.addEventListener('click', async () => {
+        listItem.remove();
+        await fetch(`/delete-history/${username}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ text }),
+        });
+    });
+    listItem.appendChild(deleteBtn);
+
+    historyList.insertBefore(listItem, historyList.firstChild);
+}
+
+// Add to Copied Text History
+function addToCopiedText(text) {
+    const listItem = document.createElement('li');
+    listItem.className = 'history-item';
+
+    const textSpan = document.createElement('span');
+    textSpan.textContent = text;
+    listItem.appendChild(textSpan);
+
+    const copyBtn = document.createElement('button');
+    copyBtn.textContent = 'Copy';
+    copyBtn.className = 'copy-btn';
+    copyBtn.addEventListener('click', () => {
+        navigator.clipboard.writeText(text).then(() => {
+            alert('Text copied to clipboard!');
+        });
+    });
+    listItem.appendChild(copyBtn);
+
+    const deleteBtn = document.createElement('button');
+    deleteBtn.textContent = '✕';
+    deleteBtn.className = 'delete-btn';
+    deleteBtn.addEventListener('click', async () => {
+        listItem.remove();
+        await fetch(`/delete-copied-text/${username}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ text }),
+        });
+    });
+    listItem.appendChild(deleteBtn);
+
+    copiedTextList.insertBefore(listItem, copiedTextList.firstChild);
+}
+
+// Clear History (Clipboard Manager)
+clearHistoryBtn.addEventListener('click', async () => {
+    historyList.innerHTML = '';
+    await fetch(`/clear-history/${username}`, { method: 'POST' });
+});
+
+// Clear Copied Text History
+clearCopiedTextBtn.addEventListener('click', async () => {
+    copiedTextList.innerHTML = '';
+    await fetch(`/clear-copied-text/${username}`, { method: 'POST' });
+});
+
+// Submit Button Logic (Clipboard Manager)
+submitBtn.addEventListener('click', async () => {
+    const text = textInput.value.trim();
+    const mode = actionMode.value;
+
     if (!text) {
-        alert('Please enter some text to submit.');
+        alert('Please enter some text!');
         return;
     }
 
-    fetch(`/update-history/${username}`, {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ text: text }),
-    })
-        .then(response => response.json())
-        .then(data => {
-            if (data.status === 'success') {
-                alert('Text submitted successfully!');
-                document.getElementById('textInput').value = '';
-                fetchHistory(username); // Refresh the history
-            } else {
-                alert('Error submitting text: ' + data.message);
-            }
-        })
-        .catch(error => {
-            alert('Error: ' + error);
+    if (mode === 'copy' || mode === 'both') {
+        await fetch(`/update-copied-text/${username}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ text }),
         });
-}
+        alert('Text added to copied text history!');
+    }
 
-// Function to delete a history item
-function deleteHistoryItem(text, username) {
-    fetch(`/delete-history/${username}`, {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ text: text }),
-    })
-        .then(response => response.json())
-        .then(data => {
-            if (data.status === 'success') {
-                alert('History item deleted!');
-                fetchHistory(username); // Refresh the history
-            } else {
-                alert('Error deleting history item: ' + data.message);
-            }
-        })
-        .catch(error => {
-            alert('Error: ' + error);
+    if (mode === 'history' || mode === 'both') {
+        addToHistory(text);
+        await fetch(`/update-history/${username}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ text }),
         });
-}
+    }
 
-// Function to clear history
-function clearHistory(username) {
-    fetch(`/clear-history/${username}`, {
-        method: 'POST',
-    })
-        .then(response => response.json())
-        .then(data => {
-            if (data.status === 'success') {
-                alert('History cleared!');
-                fetchHistory(username); // Refresh the history
-            } else {
-                alert('Error clearing history: ' + data.message);
-            }
-        })
-        .catch(error => {
-            alert('Error: ' + error);
-        });
-}
+    textInput.value = '';
+});
 
-// Function to delete a copied text item
-function deleteCopiedTextItem(text, username) {
-    fetch(`/delete-copied-text/${username}`, {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ text: text }),
-    })
-        .then(response => response.json())
-        .then(data => {
-            if (data.status === 'success') {
-                alert('Copied text item deleted!');
-                fetchCopiedText(username); // Refresh the copied text history
-            } else {
-                alert('Error deleting copied text item: ' + data.message);
-            }
-        })
-        .catch(error => {
-            alert('Error: ' + error);
-        });
-}
-
-// Function to clear copied text history
-function clearCopiedText(username) {
-    fetch(`/clear-copied-text/${username}`, {
-        method: 'POST',
-    })
-        .then(response => response.json())
-        .then(data => {
-            if (data.status === 'success') {
-                alert('Copied text history cleared!');
-                fetchCopiedText(username); // Refresh the copied text history
-            } else {
-                alert('Error clearing copied text: ' + data.message);
-            }
-        })
-        .catch(error => {
-            alert('Error: ' + error);
-        });
-}
+// Initial Load
+document.addEventListener('DOMContentLoaded', () => {
+    showClipboardManager();
+    loadHistory();
+});

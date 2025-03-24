@@ -3,10 +3,7 @@
     "builds": [
         {
             "src": "server.py",
-            "use": "@vercel/python",
-            "config": {
-                "pythonVersion": "3.9"
-            }
+            "use": "@vercel/python"
         }
     ],
     "routes": [
@@ -14,8 +11,5 @@
             "src": "/(.*)",
             "dest": "server.py"
         }
-    ],
-    "env": {
-        "DATABASE_URL": "@database_url"
-    }
+    ]
 }
