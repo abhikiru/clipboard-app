@@ -16,10 +16,10 @@ const username = document.querySelector('header p').textContent.split(': ')[1];
 
 // Toggle Sections
 function showClipboardManager() {
-    clipboardManagerSection.classList.remove('hidden');
-    copiedTextSection.classList.add('hidden');
-    clipboardManagerBtn.classList.add('active', 'bg-blue-800');
-    copiedTextBtn.classList.remove('active', 'bg-blue-800');
+    clipboardManagerSection.style.display = 'block';
+    copiedTextSection.style.display = 'none';
+    clipboardManagerBtn.classList.add('active');
+    copiedTextBtn.classList.remove('active');
     if (pollingInterval) {
         clearInterval(pollingInterval);
         pollingInterval = null;
@@ -27,10 +27,10 @@ function showClipboardManager() {
 }
 
 function showCopiedText() {
-    clipboardManagerSection.classList.add('hidden');
-    copiedTextSection.classList.remove('hidden');
-    clipboardManagerBtn.classList.remove('active', 'bg-blue-800');
-    copiedTextBtn.classList.add('active', 'bg-blue-800');
+    clipboardManagerSection.style.display = 'none';
+    copiedTextSection.style.display = 'block';
+    clipboardManagerBtn.classList.remove('active');
+    copiedTextBtn.classList.add('active');
     loadCopiedText();
     if (!pollingInterval) {
         pollingInterval = setInterval(loadCopiedText, 2000);
@@ -78,16 +78,15 @@ async function loadCopiedText() {
 // Add to Clipboard Manager History
 function addToHistory(text) {
     const listItem = document.createElement('li');
-    listItem.className = 'flex items-center justify-between bg-gradient-to-r from-white to-gray-100 p-4 rounded-lg shadow-md h-20 overflow-hidden animate-fade-in';
+    listItem.className = 'history-item';
 
     const textSpan = document.createElement('span');
     textSpan.textContent = text;
-    textSpan.className = 'flex-1 font-medium break-all overflow-y-auto max-h-full pr-4 text-gray-800';
     listItem.appendChild(textSpan);
 
     const copyBtn = document.createElement('button');
     copyBtn.textContent = 'Copy';
-    copyBtn.className = 'py-2 px-4 bg-blue-600 text-white rounded-lg hover:bg-blue-700 mr-2';
+    copyBtn.className = 'copy-btn';
     copyBtn.addEventListener('click', () => {
         navigator.clipboard.writeText(text).then(() => {
             alert('Text copied to clipboard!');
@@ -97,7 +96,7 @@ function addToHistory(text) {
 
     const deleteBtn = document.createElement('button');
     deleteBtn.textContent = '✕';
-    deleteBtn.className = 'py-2 px-4 bg-red-500 text-white rounded-lg hover:bg-red-600';
+    deleteBtn.className = 'delete-btn';
     deleteBtn.addEventListener('click', async () => {
         listItem.remove();
         await fetch(`/delete-history/${username}`, {
@@ -114,16 +113,15 @@ function addToHistory(text) {
 // Add to Copied Text History
 function addToCopiedText(text) {
     const listItem = document.createElement('li');
-    listItem.className = 'flex items-center justify-between bg-gradient-to-r from-white to-gray-100 p-4 rounded-lg shadow-md h-20 overflow-hidden animate-fade-in';
+    listItem.className = 'history-item';
 
     const textSpan = document.createElement('span');
     textSpan.textContent = text;
-    textSpan.className = 'flex-1 font-medium break-all overflow-y-auto max-h-full pr-4 text-gray-800';
     listItem.appendChild(textSpan);
 
     const copyBtn = document.createElement('button');
     copyBtn.textContent = 'Copy';
-    copyBtn.className = 'py-2 px-4 bg-blue-600 text-white rounded-lg hover:bg-blue-700 mr-2';
+    copyBtn.className = 'copy-btn';
     copyBtn.addEventListener('click', () => {
         navigator.clipboard.writeText(text).then(() => {
             alert('Text copied to clipboard!');
@@ -133,7 +131,7 @@ function addToCopiedText(text) {
 
     const deleteBtn = document.createElement('button');
     deleteBtn.textContent = '✕';
-    deleteBtn.className = 'py-2 px-4 bg-red-500 text-white rounded-lg hover:bg-red-600';
+    deleteBtn.className = 'delete-btn';
     deleteBtn.addEventListener('click', async () => {
         listItem.remove();
         await fetch(`/delete-copied-text/${username}`, {

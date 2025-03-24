@@ -75,6 +75,12 @@ async def startup_event():
         if not db.execute(users.select().where(users.c.username == "user1")).fetchone():
             db.execute(users.insert().values(username="user1", password="userpass1", role="user"))
         db.commit()
+
+        # Log all users to verify
+        all_users = db.execute(users.select()).fetchall()
+        print("Users in database on startup:")
+        for user in all_users:
+            print(f"ID: {user.id}, Username: {user.username}, Password: {user.password}, Role: {user.role}")
     finally:
         db.close()
 

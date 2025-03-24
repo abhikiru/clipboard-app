@@ -8,39 +8,39 @@
     <link rel="stylesheet" href="/static/css/styles.css">
     <link rel="icon" href="/static/favicon.ico">
 </head>
-<body class="bg-gradient-to-br from-blue-900 to-indigo-800 text-white min-h-screen flex flex-col">
-    <header class="bg-gradient-to-r from-blue-800 to-indigo-700 text-center py-6 shadow-lg">
-        <h1 class="text-4xl font-bold">Admin Dashboard</h1>
-        <p class="mt-2 text-lg opacity-80">Manage Users</p>
+<body>
+    <header>
+        <h1>Admin Dashboard</h1>
+        <p>Manage Users</p>
     </header>
 
-    <main class="flex-grow container mx-auto p-6">
-        <div class="bg-white bg-opacity-95 rounded-2xl shadow-2xl p-6">
-            <h2 class="text-2xl font-semibold text-blue-900 mb-6">User Management</h2>
+    <main>
+        <div class="container">
+            <h2>User Management</h2>
             {% if message %}
-                <p class="text-green-500 mb-4">{{ message }}</p>
+                <p class="success-message">{{ message }}</p>
             {% endif %}
-            <table class="w-full border-collapse">
+            <table>
                 <thead>
-                    <tr class="bg-gray-100">
-                        <th class="p-3 text-left text-blue-900">ID</th>
-                        <th class="p-3 text-left text-blue-900">Username</th>
-                        <th class="p-3 text-left text-blue-900">Role</th>
-                        <th class="p-3 text-left text-blue-900">Actions</th>
+                    <tr>
+                        <th>ID</th>
+                        <th>Username</th>
+                        <th>Role</th>
+                        <th>Actions</th>
                     </tr>
                 </thead>
                 <tbody>
                     {% for user in users %}
-                        <tr class="border-b">
-                            <td class="p-3">{{ user.id }}</td>
-                            <td class="p-3">{{ user.username }}</td>
-                            <td class="p-3">{{ user.role }}</td>
-                            <td class="p-3">
-                                <form method="POST" action="/admin/update_user" class="flex space-x-2">
+                        <tr>
+                            <td>{{ user.id }}</td>
+                            <td>{{ user.username }}</td>
+                            <td>{{ user.role }}</td>
+                            <td>
+                                <form method="POST" action="/admin/update_user" class="update-form">
                                     <input type="hidden" name="user_id" value="{{ user.id }}">
-                                    <input type="text" name="username" value="{{ user.username }}" class="p-2 border border-gray-300 rounded-lg" required>
-                                    <input type="text" name="password" placeholder="New Password" class="p-2 border border-gray-300 rounded-lg" required>
-                                    <button type="submit" class="py-2 px-4 bg-blue-600 text-white rounded-lg hover:bg-blue-700">Update</button>
+                                    <input type="text" name="username" value="{{ user.username }}" required>
+                                    <input type="text" name="password" placeholder="New Password" required>
+                                    <button type="submit">Update</button>
                                 </form>
                             </td>
                         </tr>
@@ -50,8 +50,8 @@
         </div>
     </main>
 
-    <footer class="bg-gradient-to-r from-blue-800 to-indigo-700 text-center py-4">
-        <p class="text-sm opacity-70">Made by Abhishek Sharma</p>
+    <footer>
+        <p>Made by Abhishek Sharma</p>
     </footer>
 </body>
 </html>

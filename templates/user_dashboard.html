@@ -8,46 +8,46 @@
     <link rel="stylesheet" href="/static/css/styles.css">
     <link rel="icon" href="/static/favicon.ico">
 </head>
-<body class="bg-gradient-to-br from-blue-900 to-indigo-800 text-white min-h-screen flex flex-col">
-    <header class="bg-gradient-to-r from-blue-800 to-indigo-700 text-center py-6 shadow-lg">
-        <h1 class="text-4xl font-bold">Clipboard Manager</h1>
-        <p class="mt-2 text-lg opacity-80">Logged in as: {{ username }}</p>
+<body>
+    <header>
+        <h1>Clipboard Manager</h1>
+        <p>Logged in as: {{ username }}</p>
     </header>
 
-    <main class="flex-grow container mx-auto p-6">
+    <main>
         <!-- Clipboard Manager Section -->
-        <section id="clipboard-manager-section" class="bg-white bg-opacity-95 rounded-2xl shadow-2xl p-6 mb-6">
-            <h2 class="text-2xl font-semibold text-blue-900 mb-6">Clipboard Manager</h2>
-            <div class="mb-6">
-                <textarea id="text-input" rows="4" placeholder="Type your text here..." class="w-full p-3 border border-gray-300 rounded-lg focus:border-blue-600 focus:outline-none resize-none"></textarea>
-                <select id="action-mode" class="w-full p-3 mt-4 border border-gray-300 rounded-lg">
+        <section id="clipboard-manager-section" class="container">
+            <h2>Clipboard Manager</h2>
+            <div class="form-section">
+                <textarea id="text-input" rows="4" placeholder="Type your text here..."></textarea>
+                <select id="action-mode">
                     <option value="copy">Copy to Clipboard</option>
                     <option value="history">Add to History</option>
                     <option value="both">Both</option>
                 </select>
-                <button id="submit-btn" class="w-full py-3 mt-4 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-lg hover:from-blue-700 hover:to-indigo-700 transform hover:scale-105 transition-all duration-300">Submit</button>
+                <button id="submit-btn">Submit</button>
             </div>
-            <div>
-                <h3 class="text-xl font-semibold text-blue-900 mb-4">Text History</h3>
-                <ul id="history-list" class="space-y-4 max-h-96 overflow-y-auto"></ul>
-                <button id="clear-history" class="mt-4 py-2 px-4 bg-red-500 text-white rounded-lg hover:bg-red-600">Clear History</button>
+            <div class="history">
+                <h3>Text History</h3>
+                <ul id="history-list" class="history-list"></ul>
+                <button id="clear-history" class="clear-btn">Clear History</button>
             </div>
         </section>
 
         <!-- Copied Text Viewer Section -->
-        <section id="copied-text-section" class="bg-white bg-opacity-95 rounded-2xl shadow-2xl p-6 hidden">
-            <h2 class="text-2xl font-semibold text-blue-900 mb-6">Copied Text History</h2>
-            <ul id="copied-text-list" class="space-y-4 max-h-96 overflow-y-auto"></ul>
-            <button id="clear-copied-text" class="mt-4 py-2 px-4 bg-red-500 text-white rounded-lg hover:bg-red-600">Clear Copied Text History</button>
+        <section id="copied-text-section" class="container" style="display: none;">
+            <h2>Copied Text History</h2>
+            <ul id="copied-text-list" class="history-list"></ul>
+            <button id="clear-copied-text" class="clear-btn">Clear Copied Text History</button>
         </section>
     </main>
 
-    <footer class="bg-gradient-to-r from-blue-800 to-indigo-700 text-center py-4">
-        <div class="flex justify-center space-x-4 mb-2">
-            <button id="clipboard-manager-btn" class="py-2 px-4 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transform hover:scale-105 transition-all duration-300 active:bg-blue-800">Clipboard Manager</button>
-            <button id="copied-text-btn" class="py-2 px-4 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transform hover:scale-105 transition-all duration-300">Copied Text Viewer</button>
+    <footer>
+        <div class="footer-buttons">
+            <button id="clipboard-manager-btn" class="footer-btn active">Clipboard Manager</button>
+            <button id="copied-text-btn" class="footer-btn">Copied Text Viewer</button>
         </div>
-        <p class="text-sm opacity-70">Made by Abhishek Sharma</p>
+        <p>Made by Abhishek Sharma</p>
     </footer>
 
     <script src="/static/js/script.js"></script>
