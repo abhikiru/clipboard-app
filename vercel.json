@@ -1,4 +1,5 @@
 {
+    "version": 2,
     "builds": [
         {
             "src": "server.py",
@@ -10,5 +11,8 @@
             "src": "/(.*)",
             "dest": "server.py"
         }
-    ]
+    ],
+    "env": {
+        "DATABASE_URL": "@database_url"
+    }
 }

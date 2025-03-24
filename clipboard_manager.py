@@ -2,7 +2,7 @@ import requests
 import pyperclip
 
 # Configuration
-API_BASE_URL = "https://clipboard-a6qozbmi4-abhishek-sharmas-projects-2069d670.vercel.app"
+API_BASE_URL = "https://clipboard-qpvdfp841-abhishek-sharmas-projects-2069d670.vercel.app"
 
 class ClipboardManager:
     def __init__(self):
