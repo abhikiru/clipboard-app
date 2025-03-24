@@ -84,12 +84,17 @@ def initialize_admin(db):
 async def check_session_expiry(request: Request, call_next):
     protected_paths = ["/dashboard", "/admin/dashboard"]
     if any(request.url.path.startswith(path) for path in protected_paths):
-        expiry = request.cookies.get("user_id_expiry") or request.cookies.get("admin_expiry")
-        if not expiry or int(expiry) < int(time.time()):
-            response = RedirectResponse(url="/", status_code=303)
-            response.delete_cookie("user_id")
-            response.delete_cookie("admin")
-            return response
+        expiry = request.cookies.get("user_id_expiry") if request.url.path.startswith(
+            "/dashboard") else request.cookies.get("admin_expiry")
+        if expiry:
+            try:
+                if int(expiry) < int(time.time()):
+                    response = RedirectResponse(url="/", status_code=303)
+                    response.delete_cookie("user_id")
+                    response.delete_cookie("admin")
+                    return response
+            except ValueError:
+                pass
     return await call_next(request)
 
 
@@ -107,7 +112,6 @@ async def user_login_get(request: Request):
 @app.post("/user/login")
 async def user_login_post(request: Request, username: str = Form(...), password: str = Form(...),
                           db: Session = Depends(get_db)):
-    # Check if the username belongs to a user
     user = db.query(User).filter(User.username == username).first()
     if user and verify_password(password, user.hashed_password):
         response = RedirectResponse(url=f"/dashboard/{user.id}", status_code=303)
@@ -116,7 +120,6 @@ async def user_login_post(request: Request, username: str = Form(...), password:
                             samesite="strict")
         return response
 
-    # Check if the username belongs to an admin
     admin = db.query(Admin).filter(Admin.username == username).first()
     if admin and verify_password(password, admin.hashed_password):
         response = RedirectResponse(url=f"/admin/dashboard", status_code=303)
@@ -125,7 +128,7 @@ async def user_login_post(request: Request, username: str = Form(...), password:
                             samesite="strict")
         return response
 
-    return templates.TemplateResponse("index.html", {"request": request, "error": "Invalid credentials"})
+    return templates.TemplateResponse("index.html", {"request": request, "error": "Invalid ID or Password"})
 
 
 @app.get("/admin", response_class=HTMLResponse)
@@ -133,13 +136,19 @@ async def admin_login_get(request: Request):
     return templates.TemplateResponse("admin_login.html", {"request": request})
 
 
+@app.get("/admin/login", response_class=HTMLResponse)
+async def admin_login_get_fallback(request: Request):
+    return RedirectResponse(url="/admin", status_code=303)
+
+
 @app.post("/admin/login")
 async def admin_login_post(request: Request, username: str = Form(...), password: str = Form(...),
                            db: Session = Depends(get_db)):
+    print(f"Received {request.method} request to /admin/login with username: {username}")
     initialize_admin(db)
     admin = db.query(Admin).filter(Admin.username == username).first()
     if not admin or not verify_password(password, admin.hashed_password):
-        return templates.TemplateResponse("admin_login.html", {"request": request, "error": "Invalid credentials"})
+        return templates.TemplateResponse("admin_login.html", {"request": request, "error": "Invalid ID or Password"})
     response = RedirectResponse(url="/admin/dashboard", status_code=303)
     response.set_cookie(key="admin", value=admin.id, httponly=True, secure=True, samesite="strict")
     response.set_cookie(key="admin_expiry", value=int(time.time()) + 1800, httponly=True, secure=True,
@@ -151,7 +160,7 @@ async def admin_login_post(request: Request, username: str = Form(...), password
 async def dashboard(request: Request, user_id: int, page: int = 1, db: Session = Depends(get_db)):
     user = db.query(User).filter(User.id == user_id).first()
     if not user:
-        raise HTTPException(status_code=404, detail="User not found")
+        return RedirectResponse(url="/user/login", status_code=303)
     copied_texts = db.query(CopiedText).filter(CopiedText.user_id == user_id).offset((page - 1) * 10).limit(10).all()
     total_texts = db.query(CopiedText).filter(CopiedText.user_id == user_id).count()
     total_pages = (total_texts // 10) + 1
@@ -168,8 +177,10 @@ async def dashboard(request: Request, user_id: int, page: int = 1, db: Session =
 async def admin_dashboard(request: Request, search: str = "", page: int = 1, db: Session = Depends(get_db)):
     admin_id = request.cookies.get("admin")
     if not admin_id:
-        raise HTTPException(status_code=403, detail="Not authorized")
+        return RedirectResponse(url="/admin", status_code=303)
     admin = db.query(Admin).filter(Admin.id == admin_id).first()
+    if not admin:
+        return RedirectResponse(url="/admin", status_code=303)
     query = db.query(CopiedText)
     if search:
         query = query.join(User).filter(
@@ -220,7 +231,6 @@ async def admin_logout():
 @app.post("/admin/add_user")
 async def add_user(request: Request, username: str = Form(...), email: str = Form(...), password: str = Form(...),
                    db: Session = Depends(get_db)):
-    # Check if username is unique across both users and admins
     if db.query(User).filter(User.username == username).first() or db.query(Admin).filter(
             Admin.username == username).first():
         return templates.TemplateResponse("admin_dashboard.html", {
@@ -255,9 +265,8 @@ async def update_admin(request: Request, new_username: str = Form(...), new_pass
                        db: Session = Depends(get_db)):
     admin_id = request.cookies.get("admin")
     if not admin_id:
-        raise HTTPException(status_code=403, detail="Not authorized")
+        return RedirectResponse(url="/admin", status_code=303)
     admin = db.query(Admin).filter(Admin.id == admin_id).first()
-    # Check if new username is unique
     if (db.query(User).filter(User.username == new_username).first() or
             db.query(Admin).filter(Admin.username == new_username, Admin.id != admin_id).first()):
         return templates.TemplateResponse("admin_dashboard.html", {
