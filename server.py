@@ -42,16 +42,20 @@ metadata.create_all(engine)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 
-# Create default admin on startup if not exists
+# Create default admin and user on startup if they don't exist
 @app.on_event("startup")
 async def startup_event():
     db = SessionLocal()
     try:
-        # Check if admin exists
-        result = db.execute(users.select().where(users.c.username == "admin1")).fetchone()
-        if not result:
+        # Check and create default admin
+        if not db.execute(users.select().where(users.c.username == "admin1")).fetchone():
             db.execute(users.insert().values(username="admin1", password="adminpass1", role="admin"))
-            db.commit()
+
+        # Check and create default user
+        if not db.execute(users.select().where(users.c.username == "user1")).fetchone():
+            db.execute(users.insert().values(username="user1", password="userpass1", role="user"))
+
+        db.commit()
     finally:
         db.close()
 
@@ -92,6 +96,26 @@ async def admin_dashboard(request: Request):
     db = SessionLocal()
     try:
         return templates.TemplateResponse("admin_dashboard.html", {"request": request, "users": get_all_users(db)})
+    finally:
+        db.close()
+
+
+@app.post("/admin/update_user")
+async def update_user(request: Request):
+    if request.session.get("user", {}).get("role") != "admin":
+        raise HTTPException(status_code=403, detail="Not authorized")
+
+    form = await request.form()
+    user_id = form.get("user_id")
+    new_username = form.get("username")
+    new_password = form.get("password")
+
+    db = SessionLocal()
+    try:
+        db.execute(users.update().where(users.c.id == user_id).values(username=new_username, password=new_password))
+        db.commit()
+        return templates.TemplateResponse("admin_dashboard.html", {"request": request, "users": get_all_users(db),
+                                                                   "message": "User updated successfully"})
     finally:
         db.close()
 
