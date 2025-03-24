@@ -1,127 +1,68 @@
 {% extends "base.html" %}
-
-{% block title %}Admin Dashboard{% endblock %}
-
-{% block css %}
-<style>
-    body {
-        background: #1e3a8a; /* Blue background */
-    }
-</style>
-{% endblock %}
-
 {% block content %}
-<div class="w-full max-w-4xl mx-auto mt-12">
-    <h2 class="text-2xl font-bold text-center text-white mb-6">Admin Dashboard</h2>
-
-    <!-- Success/Error Messages -->
-    {% if success %}
-    <p class="text-green-500 text-center mb-4">{{ success }}</p>
+<h2 class="text-xl">Admin Dashboard</h2>
+<div class="mb-4">
+    <h3>Add New User</h3>
+    <form method="post" action="/admin/add_user" class="flex space-x-2">
+        <input type="text" name="username" placeholder="Username" class="border p-2 text-black">
+        <input type="email" name="email" placeholder="Email" class="border p-2 text-black">
+        <input type="password" name="password" placeholder="Password" class="border p-2 text-black">
+        <button type="submit" class="bg-blue-700 p-2 rounded hover:bg-blue-800">Add User</button>
+    </form>
+</div>
+<h3>Manage Users</h3>
+<table class="w-full border-collapse bg-white text-black mb-4">
+    <thead>
+        <tr>
+            <th class="border p-2">Username</th>
+            <th class="border p-2">Email</th>
+            <th class="border p-2">Actions</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for user in users %}
+        <tr>
+            <td class="border p-2">{{ user.username }}</td>
+            <td class="border p-2">{{ user.email }}</td>
+            <td class="border p-2">
+                <a href="/admin/delete_user/{{ user.id }}" class="bg-red-700 p-1 rounded hover:bg-red-800">Delete</a>
+            </td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+<h3>All Copied Texts</h3>
+<form method="get" class="mb-4 flex space-x-2">
+    <input type="text" name="search" placeholder="Search by username or text" class="border p-2 text-black" value="{{ search }}">
+    <button type="submit" class="bg-blue-700 p-2 rounded hover:bg-blue-800">Search</button>
+</form>
+<table class="w-full border-collapse bg-white text-black">
+    <thead>
+        <tr>
+            <th class="border p-2">User</th>
+            <th class="border p-2">Text</th>
+            <th class="border p-2">Actions</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for text in copied_texts %}
+        <tr>
+            <td class="border p-2">{{ text.user.username }}</td>
+            <td class="border p-2">{{ text.text }}</td>
+            <td class="border p-2">
+                <a href="/admin/delete_text/{{ text.id }}" class="bg-red-700 p-1 rounded hover:bg-red-800">Delete</a>
+            </td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+<div class="mt-4 flex space-x-2">
+    {% if page > 1 %}
+    <a href="/admin/dashboard?page={{ page - 1 }}&search={{ search }}" class="bg-blue-700 p-2 rounded hover:bg-blue-800">Previous</a>
     {% endif %}
-    {% if error %}
-    <p class="text-red-500 text-center mb-4">{{ error }}</p>
+    <span>Page {{ page }} of {{ total_pages }}</span>
+    {% if page < total_pages %}
+    <a href="/admin/dashboard?page={{ page + 1 }}&search={{ search }}" class="bg-blue-700 p-2 rounded hover:bg-blue-800">Next</a>
     {% endif %}
-
-    <!-- Add New User -->
-    <div class="bg-white p-6 rounded-lg shadow-lg mb-8">
-        <h3 class="text-lg font-semibold text-gray-800 mb-4">Add New User</h3>
-        <form method="post" action="/admin/add_user">
-            <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
-                <input type="text" name="username" placeholder="Username" class="p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" required>
-                <input type="password" name="password" placeholder="Password" class="p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" required>
-                <input type="email" name="email" placeholder="Email" class="p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" required>
-            </div>
-            <button type="submit" class="w-full bg-blue-600 text-white p-3 rounded-lg hover:bg-blue-700 transition duration-300">Add User</button>
-        </form>
-    </div>
-
-    <!-- Update Admin Credentials -->
-    <div class="bg-white p-6 rounded-lg shadow-lg mb-8">
-        <h3 class="text-lg font-semibold text-gray-800 mb-4">Update Admin Credentials</h3>
-        <form method="post" action="/admin/update_admin">
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                <input type="text" name="username" placeholder="New Username" value="{{ admin.username }}" class="p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" required>
-                <input type="password" name="password" placeholder="New Password" class="p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" required>
-            </div>
-            <button type="submit" class="w-full bg-blue-600 text-white p-3 rounded-lg hover:bg-blue-700 transition duration-300">Update Admin</button>
-        </form>
-    </div>
-
-    <!-- Manage Users -->
-    <div class="bg-white p-6 rounded-lg shadow-lg mb-8">
-        <h3 class="text-lg font-semibold text-gray-800 mb-4">Manage Users</h3>
-        {% if users %}
-        <div class="overflow-x-auto">
-            <table class="w-full border-collapse">
-                <thead>
-                    <tr class="bg-gray-200">
-                        <th class="p-3 text-left">Username</th>
-                        <th class="p-3 text-left">Email</th>
-                        <th class="p-3 text-left">Actions</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for user in users %}
-                    <tr class="border-b">
-                        <td class="p-3">{{ user.username }}</td>
-                        <td class="p-3">{{ user.email }}</td>
-                        <td class="p-3">
-                            <!-- Update User Form -->
-                            <form method="post" action="/admin/update_user/{{ user.id }}" class="inline">
-                                <input type="text" name="username" value="{{ user.username }}" class="p-1 border rounded-lg mr-2" required>
-                                <input type="password" name="password" placeholder="New Password" class="p-1 border rounded-lg mr-2" required>
-                                <input type="email" name="email" value="{{ user.email }}" class="p-1 border rounded-lg mr-2" required>
-                                <button type="submit" class="bg-blue-600 text-white px-3 py-1 rounded-lg hover:bg-blue-700 transition duration-300 mr-2">Update</button>
-                            </form>
-                            <!-- Delete User Form -->
-                            <form method="post" action="/admin/delete_user/{{ user.id }}" class="inline">
-                                <button type="submit" class="bg-red-600 text-white px-3 py-1 rounded-lg hover:bg-red-700 transition duration-300">Delete</button>
-                            </form>
-                        </td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
-        </div>
-        {% else %}
-        <p class="text-gray-600 text-center">No users found.</p>
-        {% endif %}
-    </div>
-
-    <!-- View Copied Texts -->
-    <div class="bg-white p-6 rounded-lg shadow-lg">
-        <h3 class="text-lg font-semibold text-gray-800 mb-4">All Copied Texts</h3>
-        {% if copied_texts %}
-        <div class="overflow-x-auto">
-            <table class="w-full border-collapse">
-                <thead>
-                    <tr class="bg-gray-200">
-                        <th class="p-3 text-left">Username</th>
-                        <th class="p-3 text-left">Text</th>
-                        <th class="p-3 text-left">Timestamp</th>
-                        <th class="p-3 text-left">Actions</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for text in copied_texts %}
-                    <tr class="border-b">
-                        <td class="p-3">{{ text.user.username }}</td>
-                        <td class="p-3">{{ text.text }}</td>
-                        <td class="p-3">{{ text.timestamp }}</td>
-                        <td class="p-3">
-                            <!-- Delete Text Form -->
-                            <form method="post" action="/admin/delete_text/{{ text.id }}" class="inline">
-                                <button type="submit" class="bg-red-600 text-white px-3 py-1 rounded-lg hover:bg-red-700 transition duration-300">Delete</button>
-                            </form>
-                        </td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
-        </div>
-        {% else %}
-        <p class="text-gray-600 text-center">No copied texts found.</p>
-        {% endif %}
-    </div>
 </div>
 {% endblock %}

@@ -1,62 +1,37 @@
 {% extends "base.html" %}
-
-{% block title %}User Dashboard{% endblock %}
-
-{% block css %}
-<style>
-    body {
-        background: #1e3a8a; /* Blue background */
-    }
-</style>
-{% endblock %}
-
 {% block content %}
-<div class="w-full max-w-4xl mx-auto mt-12">
-    <h2 class="text-2xl font-bold text-center text-white mb-6">Welcome, {{ user.username }}!</h2>
-
-    <!-- Clipboard Manager -->
-    <div class="bg-white p-6 rounded-lg shadow-lg mb-8">
-        <h3 class="text-lg font-semibold text-gray-800 mb-4">Clipboard Manager</h3>
-        <div class="mb-4">
-            <textarea id="clipboard-text" placeholder="Enter text to copy to clipboard" class="w-full p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" rows="3"></textarea>
-        </div>
-        <button id="copy-to-clipboard-btn" class="w-full bg-blue-600 text-white p-3 rounded-lg hover:bg-blue-700 transition duration-300">Copy to Clipboard</button>
-    </div>
-
-    <!-- Copied Text Viewer -->
-    <div class="bg-white p-6 rounded-lg shadow-lg mb-8">
-        <h3 class="text-lg font-semibold text-gray-800 mb-4">Copied Text Viewer</h3>
-        <div class="mb-4">
-            <textarea id="pasted-text" placeholder="Paste text here (Ctrl+V)" class="w-full p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" rows="3"></textarea>
-        </div>
-        <button id="save-pasted-text-btn" data-user-id="{{ user.id }}" class="w-full bg-blue-600 text-white p-3 rounded-lg hover:bg-blue-700 transition duration-300">Save Pasted Text</button>
-    </div>
-
-    <!-- Copied Text History -->
-    <div class="bg-white p-6 rounded-lg shadow-lg">
-        <h3 class="text-lg font-semibold text-gray-800 mb-4">Your Copied Text History</h3>
-        {% if copied_texts %}
-        <div class="overflow-x-auto">
-            <table class="w-full border-collapse">
-                <thead>
-                    <tr class="bg-gray-200">
-                        <th class="p-3 text-left">Text</th>
-                        <th class="p-3 text-left">Timestamp</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for text in copied_texts %}
-                    <tr class="border-b">
-                        <td class="p-3">{{ text.text }}</td>
-                        <td class="p-3">{{ text.timestamp }}</td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
-        </div>
-        {% else %}
-        <p class="text-gray-600 text-center">No copied texts found.</p>
-        {% endif %}
-    </div>
+<div id="clipboard-manager" class="mb-4">
+    <h2 class="text-xl">Clipboard Manager</h2>
+    <textarea id="clipboard-text" class="border p-2 w-full text-black"></textarea>
+    <button id="copy-btn" class="bg-blue-700 p-2 rounded mt-2 hover:bg-blue-800">Copy to Clipboard</button>
+</div>
+<div id="copied-text-viewer" class="mb-4" style="display:none;">
+    <h2 class="text-xl">Copied Text Viewer</h2>
+    <textarea id="pasted-text" class="border p-2 w-full text-black"></textarea>
+    <button id="save-btn" class="bg-blue-700 p-2 rounded mt-2 hover:bg-blue-800">Save Pasted Text</button>
+</div>
+<h2 class="text-xl">Your Copied Text History</h2>
+<table class="w-full border-collapse bg-white text-black">
+    <thead>
+        <tr>
+            <th class="border p-2">Text</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for text in copied_texts %}
+        <tr>
+            <td class="border p-2">{{ text.text }}</td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+<div class="mt-4 flex space-x-2">
+    {% if page > 1 %}
+    <a href="/dashboard/{{ user.id }}?page={{ page - 1 }}" class="bg-blue-700 p-2 rounded hover:bg-blue-800">Previous</a>
+    {% endif %}
+    <span>Page {{ page }} of {{ total_pages }}</span>
+    {% if page < total_pages %}
+    <a href="/dashboard/{{ user.id }}?page={{ page + 1 }}" class="bg-blue-700 p-2 rounded hover:bg-blue-800">Next</a>
+    {% endif %}
 </div>
 {% endblock %}

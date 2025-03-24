@@ -1,11 +1,16 @@
-body {
-    font-family: 'Inter', sans-serif;
+button:hover {
+    transition: background-color 0.3s;
 }
 
-header, footer {
-    background: linear-gradient(to right, #2563eb, #7c3aed);
+textarea {
+    min-height: 100px;
+    resize: vertical;
 }
 
-main {
-    flex: 1;
+table th, table td {
+    text-align: left;
+}
+
+.shadow {
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
 }
