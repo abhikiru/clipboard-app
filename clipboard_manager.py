@@ -2,7 +2,7 @@ import requests
 import pyperclip
 
 # Configuration
-API_BASE_URL = "https://clipboard-ihpifoma4-abhishek-sharmas-projects-2069d670.vercel.app"
+API_BASE_URL = "https://clipboard-a6qozbmi4-abhishek-sharmas-projects-2069d670.vercel.app"
 
 class ClipboardManager:
     def __init__(self):
@@ -22,10 +22,14 @@ class ClipboardManager:
 
         # Make API request to authenticate
         try:
+            print(f"Sending authentication request for username: {username}")
             response = requests.post(
                 f"{API_BASE_URL}/api/authenticate",
-                data={"username": username, "password": password}
+                data={"username": username, "password": password},
+                headers={"Content-Type": "application/x-www-form-urlencoded"}
             )
+            print(f"Response status code: {response.status_code}")
+            print(f"Response content: {response.text}")
             response.raise_for_status()
             data = response.json()
 
@@ -98,6 +102,28 @@ class ClipboardManager:
         except ValueError:
             print("Error: Please enter a valid number.")
 
+    def submit_text(self, history_type="history"):
+        text = input("\nEnter text to submit: ").strip()
+        if not text:
+            print("Error: Text cannot be empty.")
+            return
+
+        endpoint = "/api/submit" if history_type == "history" else "/api/submit_copied_text"
+        try:
+            response = requests.post(
+                f"{API_BASE_URL}{endpoint}/{self.username}",
+                json={"text": text}
+            )
+            response.raise_for_status()
+            data = response.json()
+            if data["status"] == "success":
+                print("Text submitted successfully!")
+                self.load_clipboard_data()  # Refresh the list
+            else:
+                print(f"Error: {data['message']}")
+        except requests.RequestException as e:
+            print(f"Error: Failed to connect to server: {e}")
+
     def main_menu(self):
         while True:
             print("\n=== Clipboard Manager ===")
@@ -106,11 +132,13 @@ class ClipboardManager:
             print("2. View Copied Text History")
             print("3. Copy from History")
             print("4. Copy from Copied Text History")
-            print("5. Refresh Data")
-            print("6. Logout")
-            print("7. Exit")
+            print("5. Submit New Text to History")
+            print("6. Submit New Text to Copied Text History")
+            print("7. Refresh Data")
+            print("8. Logout")
+            print("9. Exit")
 
-            choice = input("Enter your choice (1-7): ").strip()
+            choice = input("Enter your choice (1-9): ").strip()
 
             if choice == "1":
                 self.display_history("history")
@@ -121,16 +149,20 @@ class ClipboardManager:
             elif choice == "4":
                 self.copy_to_clipboard("copied_text_history")
             elif choice == "5":
+                self.submit_text("history")
+            elif choice == "6":
+                self.submit_text("copied_text_history")
+            elif choice == "7":
                 if self.load_clipboard_data():
                     print("Data refreshed successfully.")
-            elif choice == "6":
+            elif choice == "8":
                 print(f"Goodbye, {self.username}!")
                 self.username = None
                 self.role = None
                 self.history = []
                 self.copied_text_history = []
                 return True  # Return to login screen
-            elif choice == "7":
+            elif choice == "9":
                 print("Exiting Clipboard Manager. Goodbye!")
                 return False  # Exit the app
             else:

@@ -1,6 +1,6 @@
 import os
 from fastapi import FastAPI, Request, HTTPException
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.sessions import SessionMiddleware
@@ -12,8 +12,14 @@ from pydantic import BaseModel
 # Initialize FastAPI app
 app = FastAPI()
 
-# Add CORS middleware
-app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
+# Add CORS middleware to allow requests from the desktop app
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # Allow all origins (for testing; restrict in production)
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 app.add_middleware(SessionMiddleware, secret_key="your-secret-key")  # Replace with a secure key later
 
 # Serve static files
@@ -370,6 +376,115 @@ async def user_dashboard(request: Request):
                                       {"request": request, "username": request.session["user"]["username"]})
 
 
+# API endpoint to authenticate users (for the desktop app)
+@app.post("/api/authenticate")
+async def authenticate_user(request: Request):
+    try:
+        form = await request.form()
+        print(f"Received form data: {dict(form)}")  # Log the form data
+        username = form.get("username")
+        password = form.get("password")
+
+        if not username or not password:
+            print("Missing username or password in form data")
+            return JSONResponse(content={"status": "error", "message": "Missing username or password"}, status_code=400)
+
+        username = username.strip()
+        password = password.strip()
+
+        print(f"API authenticate attempt - Username: {username}, Password: {password}")
+
+        db = SessionLocal()
+        try:
+            user = db.execute(users.select().where(users.c.username == username)).fetchone()
+            if user and user.password == password:
+                print(f"API authentication successful for user: {username}")
+                return JSONResponse(content={"status": "success", "username": username, "role": user.role})
+            else:
+                print(f"API authentication failed for user: {username}")
+                return JSONResponse(content={"status": "error", "message": "Invalid username or password"},
+                                    status_code=401)
+        except Exception as e:
+            print(f"Error during API authentication: {e}")
+            return JSONResponse(content={"status": "error", "message": "Server error"}, status_code=500)
+        finally:
+            db.close()
+    except Exception as e:
+        print(f"Error parsing form data: {e}")
+        return JSONResponse(content={"status": "error", "message": "Invalid request format"}, status_code=400)
+
+
+# API endpoint to fetch clipboard history for a user
+@app.get("/api/history/{username}")
+async def get_user_history(username: str):
+    db = SessionLocal()
+    try:
+        # Fetch history
+        history_items = db.execute(
+            history.select().where(history.c.username == username).order_by(history.c.id.desc())).fetchall()
+        copied_text_items = db.execute(
+            copied_text_history.select().where(copied_text_history.c.username == username).order_by(
+                copied_text_history.c.id.desc())).fetchall()
+        return JSONResponse(content={
+            "status": "success",
+            "history": [item.text for item in history_items],
+            "copied_text_history": [item.text for item in copied_text_items]
+        })
+    except Exception as e:
+        print(f"Error fetching history for {username}: {e}")
+        return JSONResponse(content={"status": "error", "message": "Error fetching history"}, status_code=500)
+    finally:
+        db.close()
+
+
+# API endpoint to submit new clipboard data
+@app.post("/api/submit/{username}")
+async def submit_clipboard_data(username: str, item: HistoryItem):
+    db = SessionLocal()
+    try:
+        db.execute(history.insert().values(username=username, text=item.text))
+        db.commit()
+        # Enforce max 10 history items
+        items = db.execute(history.select().where(history.c.username == username)).fetchall()
+        if len(items) > 10:
+            items_to_delete = len(items) - 10
+            db.execute(history.delete().where(history.c.username == username).where(history.c.id.in_(
+                [item.id for item in sorted(items, key=lambda x: x.id)[:items_to_delete]]
+            )))
+            db.commit()
+        return JSONResponse(content={"status": "success", "message": "Clipboard data submitted"})
+    except Exception as e:
+        print(f"Error submitting clipboard data for {username}: {e}")
+        return JSONResponse(content={"status": "error", "message": "Error submitting data"}, status_code=500)
+    finally:
+        db.close()
+
+
+# API endpoint to submit new copied text (used by the desktop app)
+@app.post("/api/submit_copied_text/{username}")
+async def submit_copied_text(username: str, item: HistoryItem):
+    db = SessionLocal()
+    try:
+        db.execute(copied_text_history.insert().values(username=username, text=item.text))
+        db.commit()
+        # Enforce max 10 copied text items
+        items = db.execute(copied_text_history.select().where(copied_text_history.c.username == username)).fetchall()
+        if len(items) > 10:
+            items_to_delete = len(items) - 10
+            db.execute(copied_text_history.delete().where(copied_text_history.c.username == username).where(
+                copied_text_history.c.id.in_(
+                    [item.id for item in sorted(items, key=lambda x: x.id)[:items_to_delete]]
+                )))
+            db.commit()
+        return JSONResponse(content={"status": "success", "message": "Copied text submitted"})
+    except Exception as e:
+        print(f"Error submitting copied text for {username}: {e}")
+        return JSONResponse(content={"status": "error", "message": "Error submitting data"}, status_code=500)
+    finally:
+        db.close()
+
+
+# API endpoint to update history (used by the website)
 @app.post("/update-history/{username}")
 async def update_history(username: str, item: HistoryItem):
     db = SessionLocal()
@@ -385,44 +500,60 @@ async def update_history(username: str, item: HistoryItem):
                 [item.id for item in sorted(items, key=lambda x: x.id)[:items_to_delete]]
             )))
             db.commit()
-        return {"status": "success", "message": "History updated"}
+        return JSONResponse(content={"status": "success", "message": "History updated"})
+    except Exception as e:
+        print(f"Error updating history for {username}: {e}")
+        return JSONResponse(content={"status": "error", "message": "Error updating history"}, status_code=500)
     finally:
         db.close()
 
 
+# API endpoint to fetch history (used by the website)
 @app.get("/fetch-history/{username}")
 async def fetch_history(username: str):
     db = SessionLocal()
     try:
         items = db.execute(
             history.select().where(history.c.username == username).order_by(history.c.id.desc())).fetchall()
-        return {"status": "success", "history": [item.text for item in items]}
+        return JSONResponse(content={"status": "success", "history": [item.text for item in items]})
+    except Exception as e:
+        print(f"Error fetching history for {username}: {e}")
+        return JSONResponse(content={"status": "error", "message": "Error fetching history"}, status_code=500)
     finally:
         db.close()
 
 
+# API endpoint to delete a history item (used by the website)
 @app.post("/delete-history/{username}")
 async def delete_history(username: str, item: HistoryItem):
     db = SessionLocal()
     try:
         db.execute(history.delete().where(history.c.username == username).where(history.c.text == item.text))
         db.commit()
-        return {"status": "success", "message": "History item deleted"}
+        return JSONResponse(content={"status": "success", "message": "History item deleted"})
+    except Exception as e:
+        print(f"Error deleting history for {username}: {e}")
+        return JSONResponse(content={"status": "error", "message": "Error deleting history"}, status_code=500)
     finally:
         db.close()
 
 
+# API endpoint to clear history (used by the website)
 @app.post("/clear-history/{username}")
 async def clear_history(username: str):
     db = SessionLocal()
     try:
         db.execute(history.delete().where(history.c.username == username))
         db.commit()
-        return {"status": "success", "message": "History cleared"}
+        return JSONResponse(content={"status": "success", "message": "History cleared"})
+    except Exception as e:
+        print(f"Error clearing history for {username}: {e}")
+        return JSONResponse(content={"status": "error", "message": "Error clearing history"}, status_code=500)
     finally:
         db.close()
 
 
+# API endpoint to update copied text (used by the website)
 @app.post("/update-copied-text/{username}")
 async def update_copied_text(username: str, item: HistoryItem):
     db = SessionLocal()
@@ -439,22 +570,30 @@ async def update_copied_text(username: str, item: HistoryItem):
                     [item.id for item in sorted(items, key=lambda x: x.id)[:items_to_delete]]
                 )))
             db.commit()
-        return {"status": "success", "message": "Copied text updated"}
+        return JSONResponse(content={"status": "success", "message": "Copied text updated"})
+    except Exception as e:
+        print(f"Error updating copied text for {username}: {e}")
+        return JSONResponse(content={"status": "error", "message": "Error updating copied text"}, status_code=500)
     finally:
         db.close()
 
 
+# API endpoint to fetch copied text (used by the website)
 @app.get("/fetch-copied-text/{username}")
 async def fetch_copied_text(username: str):
     db = SessionLocal()
     try:
         items = db.execute(copied_text_history.select().where(copied_text_history.c.username == username).order_by(
             copied_text_history.c.id.desc())).fetchall()
-        return {"status": "success", "history": [item.text for item in items]}
+        return JSONResponse(content={"status": "success", "history": [item.text for item in items]})
+    except Exception as e:
+        print(f"Error fetching copied text for {username}: {e}")
+        return JSONResponse(content={"status": "error", "message": "Error fetching copied text"}, status_code=500)
     finally:
         db.close()
 
 
+# API endpoint to delete a copied text item (used by the website)
 @app.post("/delete-copied-text/{username}")
 async def delete_copied_text(username: str, item: HistoryItem):
     db = SessionLocal()
@@ -462,18 +601,25 @@ async def delete_copied_text(username: str, item: HistoryItem):
         db.execute(copied_text_history.delete().where(copied_text_history.c.username == username).where(
             copied_text_history.c.text == item.text))
         db.commit()
-        return {"status": "success", "message": "Copied text item deleted"}
+        return JSONResponse(content={"status": "success", "message": "Copied text item deleted"})
+    except Exception as e:
+        print(f"Error deleting copied text for {username}: {e}")
+        return JSONResponse(content={"status": "error", "message": "Error deleting copied text"}, status_code=500)
     finally:
         db.close()
 
 
+# API endpoint to clear copied text (used by the website)
 @app.post("/clear-copied-text/{username}")
 async def clear_copied_text(username: str):
     db = SessionLocal()
     try:
         db.execute(copied_text_history.delete().where(copied_text_history.c.username == username))
         db.commit()
-        return {"status": "success", "message": "Copied text history cleared"}
+        return JSONResponse(content={"status": "success", "message": "Copied text history cleared"})
+    except Exception as e:
+        print(f"Error clearing copied text for {username}: {e}")
+        return JSONResponse(content={"status": "error", "message": "Error clearing copied text"}, status_code=500)
     finally:
         db.close()
 
