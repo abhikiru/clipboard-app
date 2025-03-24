@@ -1,14 +1,11 @@
-{% extends "base.html" %}
-{% block content %}
-<div class="max-w-md mx-auto bg-white p-6 rounded shadow text-black">
-    <h2 class="text-2xl mb-4">User Login</h2>
-    <form method="post">
-        <input type="text" name="username" placeholder="Username" class="border p-2 w-full mb-2">
-        <input type="password" name="password" placeholder="Password" class="border p-2 w-full mb-2">
-        <button type="submit" class="bg-blue-700 text-white p-2 rounded w-full hover:bg-blue-800">Login</button>
-    </form>
-    {% if error %}
-    <p class="text-red-500 mt-2">{{ error }}</p>
-    {% endif %}
-</div>
-{% endblock %}
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Clipboard App</title>
+    <link rel="stylesheet" href="/static/css/global.css">
+</head>
+<body>
+    <h1>Welcome to Clipboard App</h1>
+    <a href="/user/login">User Login</a> | <a href="/admin">Admin Login</a>
+</body>
+</html>

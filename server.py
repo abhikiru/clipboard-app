@@ -1,66 +1,55 @@
-from fastapi import FastAPI, Request, Form, HTTPException, Depends
-from fastapi.responses import HTMLResponse, RedirectResponse
-from fastapi.staticfiles import StaticFiles
+from fastapi import FastAPI, Form, Request, Depends, HTTPException
+from fastapi.responses import RedirectResponse, HTMLResponse
 from fastapi.templating import Jinja2Templates
-from sqlalchemy import create_engine, Column, Integer, String, Text, ForeignKey
+from sqlalchemy import Column, Integer, String, Text, ForeignKey
 from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import sessionmaker, relationship, Session
-from passlib.context import CryptContext
-import os
-import time
-
-# Database setup with Neon PostgreSQL
-DATABASE_URL = (os.getenv("DATABASE_URL") or os.getenv("userurl")).replace("postgres://", "postgresql://")
-engine = create_engine(DATABASE_URL)
-SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
-Base = declarative_base()
-
-
-# Models
-class User(Base):
-    __tablename__ = "users"
-    id = Column(Integer, primary_key=True, index=True)
-    username = Column(String, unique=True, index=True)
-    email = Column(String, unique=True, index=True)
-    hashed_password = Column(String)
-    copied_texts = relationship("CopiedText", back_populates="user")
-
-
-class CopiedText(Base):
-    __tablename__ = "copied_texts"
-    id = Column(Integer, primary_key=True, index=True)
-    text = Column(Text)
-    user_id = Column(Integer, ForeignKey("users.id"))
-    user = relationship("User", back_populates="copied_texts")
-
-
-class Admin(Base):
-    __tablename__ = "admins"
-    id = Column(Integer, primary_key=True, index=True)
-    username = Column(String, unique=True, index=True)
-    hashed_password = Column(String)
-
-
-Base.metadata.create_all(bind=engine)
+from sqlalchemy.orm import Session, relationship
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
+from starlette.middleware.sessions import SessionMiddleware
+from starlette.middleware.base import BaseHTTPMiddleware
+from datetime import datetime, timedelta
 
 # FastAPI app setup
 app = FastAPI()
-app.mount("/static", StaticFiles(directory="static"), name="static")
-templates = Jinja2Templates(directory="templates")
 
-# Password hashing
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+# Add session middleware
+app.add_middleware(SessionMiddleware, secret_key="your-secret-key")  # Replace with a secure key
 
+# Database setup (replace with your Neon PostgreSQL URL)
+DATABASE_URL = "postgresql://neondb_owner:npg_OhQR57ypVXH@ep-misty-leaf-a5xvgk2g-pooler.us-east-2.aws.neon.tech/neondb?sslmode=require"
+engine = create_engine(DATABASE_URL)
+SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
-# Helper functions
-def get_password_hash(password):
-    return pwd_context.hash(password)
+# SQLAlchemy base
+Base = declarative_base()
 
+# Models
+class Admin(Base):
+    __tablename__ = "admins"
+    id = Column(Integer, primary_key=True)
+    username = Column(String, unique=True, nullable=False)
+    hashed_password = Column(String, nullable=False)  # Storing plain text password
 
-def verify_password(plain_password, hashed_password):
-    return pwd_context.verify(plain_password, hashed_password)
+class User(Base):
+    __tablename__ = "users"
+    id = Column(Integer, primary_key=True)
+    username = Column(String, unique=True, nullable=False)
+    email = Column(String, unique=True, nullable=False)
+    password_hash = Column(String, nullable=False)  # Storing plain text password
+    copied_texts = relationship("CopiedText", back_populates="user")
 
+class CopiedText(Base):
+    __tablename__ = "copied_texts"
+    id = Column(Integer, primary_key=True)
+    text = Column(Text, nullable=False)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    user = relationship("User", back_populates="copied_texts")
 
+# Create tables (if not already created)
+Base.metadata.create_all(bind=engine)
+
+# Dependency to get the database session
 def get_db():
     db = SessionLocal()
     try:
@@ -68,251 +57,118 @@ def get_db():
     finally:
         db.close()
 
+# Templates setup (assuming you're using Jinja2 for rendering HTML)
+templates = Jinja2Templates(directory="templates")
 
-# Initialize default admin
-def initialize_admin(db):
-    admin = db.query(Admin).first()
-    if not admin:
-        hashed_password = get_password_hash("securepass2025")
-        new_admin = Admin(username="superadmin", hashed_password=hashed_password)
-        db.add(new_admin)
-        db.commit()
+# Middleware to check session expiry
+class CheckSessionExpiryMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request: Request, call_next):
+        # Check if the session has an admin or user
+        if "admin" in request.session:
+            last_activity = request.session.get("last_activity")
+            if last_activity:
+                last_activity_time = datetime.fromisoformat(last_activity)
+                if datetime.now() - last_activity_time > timedelta(minutes=30):
+                    del request.session["admin"]
+                    return RedirectResponse(url="/admin", status_code=303)
+            request.session["last_activity"] = datetime.now().isoformat()
+        elif "user" in request.session:
+            last_activity = request.session.get("last_activity")
+            if last_activity:
+                last_activity_time = datetime.fromisoformat(last_activity)
+                if datetime.now() - last_activity_time > timedelta(minutes=30):
+                    del request.session["user"]
+                    return RedirectResponse(url="/", status_code=303)
+            request.session["last_activity"] = datetime.now().isoformat()
+        return await call_next(request)
 
-
-# Middleware for session expiry
-@app.middleware("http")
-async def check_session_expiry(request: Request, call_next):
-    protected_paths = ["/dashboard", "/admin/dashboard"]
-    if any(request.url.path.startswith(path) for path in protected_paths):
-        expiry = request.cookies.get("user_id_expiry") if request.url.path.startswith(
-            "/dashboard") else request.cookies.get("admin_expiry")
-        if expiry:
-            try:
-                if int(expiry) < int(time.time()):
-                    response = RedirectResponse(url="/", status_code=303)
-                    response.delete_cookie("user_id")
-                    response.delete_cookie("admin")
-                    return response
-            except ValueError:
-                pass
-    return await call_next(request)
-
+app.add_middleware(CheckSessionExpiryMiddleware)
 
 # Routes
+
+# Homepage
 @app.get("/", response_class=HTMLResponse)
-async def landing_page(request: Request):
-    return templates.TemplateResponse("landing.html", {"request": request})
-
-
-@app.get("/user/login", response_class=HTMLResponse)
-async def user_login_get(request: Request):
+async def homepage(request: Request):
     return templates.TemplateResponse("index.html", {"request": request})
 
-
-@app.post("/user/login")
-async def user_login_post(request: Request, username: str = Form(...), password: str = Form(...),
-                          db: Session = Depends(get_db)):
-    user = db.query(User).filter(User.username == username).first()
-    if user and verify_password(password, user.hashed_password):
-        response = RedirectResponse(url=f"/dashboard/{user.id}", status_code=303)
-        response.set_cookie(key="user_id", value=user.id, httponly=True, secure=True, samesite="strict")
-        response.set_cookie(key="user_id_expiry", value=int(time.time()) + 1800, httponly=True, secure=True,
-                            samesite="strict")
-        return response
-
-    admin = db.query(Admin).filter(Admin.username == username).first()
-    if admin and verify_password(password, admin.hashed_password):
-        response = RedirectResponse(url=f"/admin/dashboard", status_code=303)
-        response.set_cookie(key="admin", value=admin.id, httponly=True, secure=True, samesite="strict")
-        response.set_cookie(key="admin_expiry", value=int(time.time()) + 1800, httponly=True, secure=True,
-                            samesite="strict")
-        return response
-
-    return templates.TemplateResponse("index.html", {"request": request, "error": "Invalid ID or Password"})
-
-
+# Admin login page (GET)
 @app.get("/admin", response_class=HTMLResponse)
-async def admin_login_get(request: Request):
+async def admin_login_page(request: Request):
     return templates.TemplateResponse("admin_login.html", {"request": request})
 
+# Admin login (POST)
+@app.post("/admin/login")
+async def admin_login_post(request: Request, username: str = Form(...), password: str = Form(...), db: Session = Depends(get_db)):
+    admin = db.query(Admin).filter(Admin.username == username).first()
+    if not admin or admin.hashed_password != password:  # Direct comparison
+        return templates.TemplateResponse("admin_login.html", {"request": request, "error": "Invalid username or password"})
+    # Successful login
+    request.session["admin"] = admin.id
+    request.session["last_activity"] = datetime.now().isoformat()
+    return RedirectResponse(url="/admin/dashboard", status_code=303)
 
-@app.get("/admin/login", response_class=HTMLResponse)
-async def admin_login_get_fallback(request: Request):
+# Admin dashboard
+@app.get("/admin/dashboard", response_class=HTMLResponse)
+async def admin_dashboard(request: Request, db: Session = Depends(get_db)):
+    if "admin" not in request.session:
+        return RedirectResponse(url="/admin", status_code=303)
+    # Fetch some data for the dashboard (e.g., all users)
+    users = db.query(User).all()
+    return templates.TemplateResponse("user_login.html", {"request": request, "users": users})
+
+# Admin logout
+@app.get("/admin/logout")
+async def admin_logout(request: Request):
+    request.session.pop("admin", None)
+    request.session.pop("last_activity", None)
     return RedirectResponse(url="/admin", status_code=303)
 
+# User login page (GET)
+@app.get("/user/login", response_class=HTMLResponse)
+async def user_login_page(request: Request):
+    return templates.TemplateResponse("user_login.html", {"request": request})
 
-@app.post("/admin/login")
-async def admin_login_post(request: Request, username: str = Form(...), password: str = Form(...),
-                           db: Session = Depends(get_db)):
-    print(f"Received {request.method} request to /admin/login with username: {username}")
-    initialize_admin(db)
-    admin = db.query(Admin).filter(Admin.username == username).first()
-    if not admin or not verify_password(password, admin.hashed_password):
-        return templates.TemplateResponse("admin_login.html", {"request": request, "error": "Invalid ID or Password"})
-    response = RedirectResponse(url="/admin/dashboard", status_code=303)
-    response.set_cookie(key="admin", value=admin.id, httponly=True, secure=True, samesite="strict")
-    response.set_cookie(key="admin_expiry", value=int(time.time()) + 1800, httponly=True, secure=True,
-                        samesite="strict")
-    return response
+# User login (POST)
+@app.post("/user/login")
+async def user_login_post(request: Request, username: str = Form(...), password: str = Form(...), db: Session = Depends(get_db)):
+    user = db.query(User).filter(User.username == username).first()
+    if not user or user.password_hash != password:  # Direct comparison
+        return templates.TemplateResponse("user_login.html", {"request": request, "error": "Invalid username or password"})
+    # Successful login
+    request.session["user"] = user.id
+    request.session["last_activity"] = datetime.now().isoformat()
+    return RedirectResponse(url="/user/dashboard", status_code=303)
 
-
-@app.get("/dashboard/{user_id}", response_class=HTMLResponse)
-async def dashboard(request: Request, user_id: int, page: int = 1, db: Session = Depends(get_db)):
-    user = db.query(User).filter(User.id == user_id).first()
-    if not user:
+# User dashboard
+@app.get("/user/dashboard", response_class=HTMLResponse)
+async def user_dashboard(request: Request, db: Session = Depends(get_db)):
+    if "user" not in request.session:
         return RedirectResponse(url="/user/login", status_code=303)
-    copied_texts = db.query(CopiedText).filter(CopiedText.user_id == user_id).offset((page - 1) * 10).limit(10).all()
-    total_texts = db.query(CopiedText).filter(CopiedText.user_id == user_id).count()
-    total_pages = (total_texts // 10) + 1
-    return templates.TemplateResponse("dashboard.html", {
-        "request": request,
-        "user": user,
-        "copied_texts": copied_texts,
-        "page": page,
-        "total_pages": total_pages
-    })
+    user_id = request.session["user"]
+    user = db.query(User).filter(User.id == user_id).first()
+    copied_texts = db.query(CopiedText).filter(CopiedText.user_id == user_id).all()
+    return templates.TemplateResponse("user_dashboard.html", {"request": request, "user": user, "copied_texts": copied_texts})
 
-
-@app.get("/admin/dashboard", response_class=HTMLResponse)
-async def admin_dashboard(request: Request, search: str = "", page: int = 1, db: Session = Depends(get_db)):
-    admin_id = request.cookies.get("admin")
-    if not admin_id:
-        return RedirectResponse(url="/admin", status_code=303)
-    admin = db.query(Admin).filter(Admin.id == admin_id).first()
-    if not admin:
-        return RedirectResponse(url="/admin", status_code=303)
-    query = db.query(CopiedText)
-    if search:
-        query = query.join(User).filter(
-            (User.username.ilike(f"%{search}%")) | (CopiedText.text.ilike(f"%{search}%"))
-        )
-    copied_texts = query.offset((page - 1) * 10).limit(10).all()
-    total_texts = query.count()
-    total_pages = (total_texts // 10) + 1
-    users = db.query(User).all()
-    return templates.TemplateResponse("admin_dashboard.html", {
-        "request": request,
-        "admin": admin,
-        "users": users,
-        "copied_texts": copied_texts,
-        "search": search,
-        "page": page,
-        "total_pages": total_pages
-    })
-
-
-@app.post("/api/save_text")
-async def save_text(request: Request, text: str = Form(...), db: Session = Depends(get_db)):
-    user_id = request.cookies.get("user_id")
-    if not user_id or len(text) > 1000 or not text.strip():
-        raise HTTPException(status_code=400, detail="Invalid request")
-    new_text = CopiedText(text=text, user_id=user_id)
-    db.add(new_text)
-    db.commit()
-    return {"status": "success"}
-
-
-@app.get("/user/logout")
-async def user_logout():
-    response = RedirectResponse(url="/", status_code=303)
-    response.delete_cookie("user_id")
-    response.delete_cookie("user_id_expiry")
-    return response
-
-
-@app.get("/admin/logout")
-async def admin_logout():
-    response = RedirectResponse(url="/", status_code=303)
-    response.delete_cookie("admin")
-    response.delete_cookie("admin_expiry")
-    return response
-
-
-@app.post("/admin/add_user")
-async def add_user(request: Request, username: str = Form(...), email: str = Form(...), password: str = Form(...),
-                   db: Session = Depends(get_db)):
-    if db.query(User).filter(User.username == username).first() or db.query(Admin).filter(
-            Admin.username == username).first():
-        return templates.TemplateResponse("admin_dashboard.html", {
-            "request": request,
-            "error": "Username already exists",
-            "users": db.query(User).all(),
-            "copied_texts": db.query(CopiedText).offset(0).limit(10).all(),
-            "search": "",
-            "page": 1,
-            "total_pages": 1
-        })
-    if not (3 <= len(username) <= 20 and username.isalnum()) or not (
-            8 <= len(password) <= 50 and any(c.isalpha() for c in password) and any(c.isdigit() for c in password)):
-        return templates.TemplateResponse("admin_dashboard.html", {
-            "request": request,
-            "error": "Invalid input: Username must be 3-20 alphanumeric characters, password must be 8-50 characters with letters and numbers",
-            "users": db.query(User).all(),
-            "copied_texts": db.query(CopiedText).offset(0).limit(10).all(),
-            "search": "",
-            "page": 1,
-            "total_pages": 1
-        })
-    hashed_password = get_password_hash(password)
-    new_user = User(username=username, email=email, hashed_password=hashed_password)
+# User registration (optional, if you want to allow registration)
+@app.post("/user/register")
+async def register_user(username: str = Form(...), email: str = Form(...), password: str = Form(...), db: Session = Depends(get_db)):
+    existing_user = db.query(User).filter(User.username == username).first()
+    if existing_user:
+        raise HTTPException(status_code=400, detail="Username already exists")
+    new_user = User(username=username, email=email, password_hash=password)  # Store as plain text
     db.add(new_user)
     db.commit()
-    return RedirectResponse(url="/admin/dashboard", status_code=303)
+    return RedirectResponse(url="/user/login", status_code=303)
 
-
-@app.post("/admin/update_admin")
-async def update_admin(request: Request, new_username: str = Form(...), new_password: str = Form(...),
-                       db: Session = Depends(get_db)):
-    admin_id = request.cookies.get("admin")
-    if not admin_id:
-        return RedirectResponse(url="/admin", status_code=303)
-    admin = db.query(Admin).filter(Admin.id == admin_id).first()
-    if (db.query(User).filter(User.username == new_username).first() or
-            db.query(Admin).filter(Admin.username == new_username, Admin.id != admin_id).first()):
-        return templates.TemplateResponse("admin_dashboard.html", {
-            "request": request,
-            "error": "Username already exists",
-            "admin": admin,
-            "users": db.query(User).all(),
-            "copied_texts": db.query(CopiedText).offset(0).limit(10).all(),
-            "search": "",
-            "page": 1,
-            "total_pages": 1
-        })
-    if not (3 <= len(new_username) <= 20 and new_username.isalnum()) or not (
-            8 <= len(new_password) <= 50 and any(c.isalpha() for c in new_password) and any(
-            c.isdigit() for c in new_password)):
-        return templates.TemplateResponse("admin_dashboard.html", {
-            "request": request,
-            "error": "Invalid input: Username must be 3-20 alphanumeric characters, password must be 8-50 characters with letters and numbers",
-            "admin": admin,
-            "users": db.query(User).all(),
-            "copied_texts": db.query(CopiedText).offset(0).limit(10).all(),
-            "search": "",
-            "page": 1,
-            "total_pages": 1
-        })
-    admin.username = new_username
-    admin.hashed_password = get_password_hash(new_password)
-    db.commit()
-    return RedirectResponse(url="/admin/dashboard", status_code=303)
-
-
-@app.post("/admin/delete_user/{user_id}")
-async def delete_user(user_id: int, db: Session = Depends(get_db)):
-    user = db.query(User).filter(User.id == user_id).first()
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found")
-    db.delete(user)
-    db.commit()
-    return RedirectResponse(url="/admin/dashboard", status_code=303)
-
-
-@app.post("/admin/delete_text/{text_id}")
-async def delete_text(text_id: int, db: Session = Depends(get_db)):
-    text = db.query(CopiedText).filter(CopiedText.id == text_id).first()
-    if not text:
-        raise HTTPException(status_code=404, detail="Text not found")
-    db.delete(text)
-    db.commit()
-    return RedirectResponse(url="/admin/dashboard", status_code=303)
+# Example: Initialize admin (run this once to create an admin if needed)
+@app.on_event("startup")
+async def startup_event():
+    db = SessionLocal()
+    try:
+        admin = db.query(Admin).first()
+        if not admin:
+            new_admin = Admin(username="admin", hashed_password="adminpass")
+            db.add(new_admin)
+            db.commit()
+    finally:
+        db.close()
