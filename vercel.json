@@ -1,9 +1,12 @@
 {
+    "version": 2,
     "builds": [
         {
             "src": "server.py",
             "use": "@vercel/python",
-            "config": { "pythonVersion": "3.9" }
+            "config": {
+                "pythonVersion": "3.9"
+            }
         }
     ],
     "routes": [
