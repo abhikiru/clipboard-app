@@ -175,6 +175,50 @@ async def admin_dashboard(request: Request):
         db.close()
 
 
+@app.post("/admin/add_user")
+async def add_user(request: Request):
+    if request.session.get("user", {}).get("role") != "admin":
+        print("Add user access denied: Not authorized")
+        raise HTTPException(status_code=403, detail="Not authorized")
+
+    form = await request.form()
+    username = form.get("username").strip()
+    password = form.get("password").strip()
+    role = form.get("role").strip()
+
+    print(f"Adding new user - Username: {username}, Password: {password}, Role: {role}")
+
+    db = SessionLocal()
+    try:
+        # Check if username already exists
+        if db.execute(users.select().where(users.c.username == username)).fetchone():
+            print(f"Add user failed: Username '{username}' already exists")
+            return templates.TemplateResponse("admin_dashboard.html", {
+                "request": request,
+                "users": get_all_users(db),
+                "message": f"Username '{username}' already exists"
+            })
+
+        # Insert the new user
+        db.execute(users.insert().values(username=username, password=password, role=role))
+        db.commit()
+        print("User added successfully")
+        return templates.TemplateResponse("admin_dashboard.html", {
+            "request": request,
+            "users": get_all_users(db),
+            "message": f"User '{username}' added successfully"
+        })
+    except Exception as e:
+        print(f"Error adding user: {e}")
+        return templates.TemplateResponse("admin_dashboard.html", {
+            "request": request,
+            "users": get_all_users(db),
+            "message": "Error adding user"
+        })
+    finally:
+        db.close()
+
+
 @app.post("/admin/update_user")
 async def update_user(request: Request):
     if request.session.get("user", {}).get("role") != "admin":
@@ -190,11 +234,36 @@ async def update_user(request: Request):
 
     db = SessionLocal()
     try:
-        db.execute(users.update().where(users.c.id == user_id).values(username=new_username, password=new_password))
+        # Check if the new username is already taken by another user
+        existing_user = db.execute(
+            users.select().where(users.c.username == new_username).where(users.c.id != user_id)).fetchone()
+        if existing_user:
+            print(f"Update user failed: Username '{new_username}' already exists")
+            return templates.TemplateResponse("admin_dashboard.html", {
+                "request": request,
+                "users": get_all_users(db),
+                "message": f"Username '{new_username}' already exists"
+            })
+
+        # Update the user
+        update_values = {"username": new_username}
+        if new_password:  # Only update password if a new one is provided
+            update_values["password"] = new_password
+        db.execute(users.update().where(users.c.id == user_id).values(**update_values))
         db.commit()
         print("User updated successfully")
-        return templates.TemplateResponse("admin_dashboard.html", {"request": request, "users": get_all_users(db),
-                                                                   "message": "User updated successfully"})
+        return templates.TemplateResponse("admin_dashboard.html", {
+            "request": request,
+            "users": get_all_users(db),
+            "message": "User updated successfully"
+        })
+    except Exception as e:
+        print(f"Error updating user: {e}")
+        return templates.TemplateResponse("admin_dashboard.html", {
+            "request": request,
+            "users": get_all_users(db),
+            "message": "Error updating user"
+        })
     finally:
         db.close()
 

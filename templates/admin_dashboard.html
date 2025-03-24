@@ -3,55 +3,60 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Admin Dashboard - Clipboard Manager</title>
-    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="/static/css/styles.css">
-    <link rel="icon" href="/static/favicon.ico">
+    <title>Admin Dashboard</title>
+    <link rel="stylesheet" href="/static/styles.css">
 </head>
 <body>
-    <header>
+    <div class="container">
         <h1>Admin Dashboard</h1>
-        <p>Manage Users</p>
-    </header>
+        <h2>Manage Users</h2>
 
-    <main>
-        <div class="container">
-            <h2>User Management</h2>
-            {% if message %}
-                <p class="success-message">{{ message }}</p>
-            {% endif %}
-            <table>
-                <thead>
-                    <tr>
-                        <th>ID</th>
-                        <th>Username</th>
-                        <th>Role</th>
-                        <th>Actions</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for user in users %}
-                        <tr>
-                            <td>{{ user.id }}</td>
-                            <td>{{ user.username }}</td>
-                            <td>{{ user.role }}</td>
-                            <td>
-                                <form method="POST" action="/admin/update_user" class="update-form">
-                                    <input type="hidden" name="user_id" value="{{ user.id }}">
-                                    <input type="text" name="username" value="{{ user.username }}" required>
-                                    <input type="text" name="password" placeholder="New Password" required>
-                                    <button type="submit">Update</button>
-                                </form>
-                            </td>
-                        </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
+        <!-- Add User Form -->
+        <div class="add-user-form">
+            <h3>Add New User</h3>
+            <form action="/admin/add_user" method="post">
+                <input type="text" name="username" placeholder="New Username" required>
+                <input type="text" name="password" placeholder="New Password" required>
+                <select name="role" required>
+                    <option value="admin">Admin</option>
+                    <option value="user">User</option>
+                </select>
+                <button type="submit">Add User</button>
+            </form>
         </div>
-    </main>
 
-    <footer>
-        <p>Made by Abhishek Sharma</p>
-    </footer>
+        <!-- User Management Table -->
+        <table>
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>Username</th>
+                    <th>Role</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for user in users %}
+                <tr>
+                    <td>{{ user.id }}</td>
+                    <td>{{ user.username }}</td>
+                    <td>{{ user.role }}</td>
+                    <td>
+                        <form action="/admin/update_user" method="post" style="display:inline;">
+                            <input type="hidden" name="user_id" value="{{ user.id }}">
+                            <input type="text" name="username" value="{{ user.username }}" required>
+                            <input type="text" name="password" placeholder="New Password">
+                            <button type="submit">Update</button>
+                        </form>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+
+        {% if message %}
+        <p class="message">{{ message }}</p>
+        {% endif %}
+    </div>
 </body>
 </html>
