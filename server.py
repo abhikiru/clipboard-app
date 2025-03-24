@@ -107,6 +107,7 @@ async def login(request: Request, username: str = Form(...), password: str = For
             return templates.TemplateResponse("index.html",
                                               {"request": request, "error": "Invalid username or password"})
 
+        print(f"User {username} logged in successfully, redirecting to /dashboard/{user.id}")
         response = RedirectResponse(url=f"/dashboard/{user.id}", status_code=303)
         response.set_cookie(key="user_id", value=str(user.id))
         return response
@@ -125,11 +126,14 @@ async def user_logout():
 @app.get("/dashboard/{user_id}", response_class=HTMLResponse)
 async def dashboard(request: Request, user_id: int, db: Session = Depends(get_db)):
     try:
+        print(f"Accessing dashboard for user_id: {user_id}")
         user = db.query(User).filter(User.id == user_id).first()
         if not user:
+            print(f"User with ID {user_id} not found, redirecting to /user/login")
             return RedirectResponse(url="/user/login", status_code=303)
 
         copied_texts = db.query(CopiedText).filter(CopiedText.user_id == user_id).all()
+        print(f"Rendering dashboard for user: {user.username}")
         return templates.TemplateResponse("dashboard.html",
                                           {"request": request, "user": user, "copied_texts": copied_texts})
     except Exception as e:
