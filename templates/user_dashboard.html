@@ -1,30 +1,55 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-    <title>Clipboard App</title>
-    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
-    <link rel="stylesheet" href="/static/css/global.css">
-    <link rel="stylesheet" href="/static/css/admin.css">
-    <link rel="stylesheet" href="/static/css/user.css">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>User Dashboard - Clipboard Manager</title>
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/css/styles.css">
+    <link rel="icon" href="/static/favicon.ico">
 </head>
-<body class="bg-blue-500 text-white">
-    <header class="p-4">
-        <h1 class="text-2xl">Clipboard App</h1>
+<body class="bg-gradient-to-br from-blue-900 to-indigo-800 text-white min-h-screen flex flex-col">
+    <header class="bg-gradient-to-r from-blue-800 to-indigo-700 text-center py-6 shadow-lg">
+        <h1 class="text-4xl font-bold">Clipboard Manager</h1>
+        <p class="mt-2 text-lg opacity-80">Logged in as: {{ username }}</p>
     </header>
-    <main class="p-4">
-        {% block content %}{% endblock %}
+
+    <main class="flex-grow container mx-auto p-6">
+        <!-- Clipboard Manager Section -->
+        <section id="clipboard-manager-section" class="bg-white bg-opacity-95 rounded-2xl shadow-2xl p-6 mb-6">
+            <h2 class="text-2xl font-semibold text-blue-900 mb-6">Clipboard Manager</h2>
+            <div class="mb-6">
+                <textarea id="text-input" rows="4" placeholder="Type your text here..." class="w-full p-3 border border-gray-300 rounded-lg focus:border-blue-600 focus:outline-none resize-none"></textarea>
+                <select id="action-mode" class="w-full p-3 mt-4 border border-gray-300 rounded-lg">
+                    <option value="copy">Copy to Clipboard</option>
+                    <option value="history">Add to History</option>
+                    <option value="both">Both</option>
+                </select>
+                <button id="submit-btn" class="w-full py-3 mt-4 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-lg hover:from-blue-700 hover:to-indigo-700 transform hover:scale-105 transition-all duration-300">Submit</button>
+            </div>
+            <div>
+                <h3 class="text-xl font-semibold text-blue-900 mb-4">Text History</h3>
+                <ul id="history-list" class="space-y-4 max-h-96 overflow-y-auto"></ul>
+                <button id="clear-history" class="mt-4 py-2 px-4 bg-red-500 text-white rounded-lg hover:bg-red-600">Clear History</button>
+            </div>
+        </section>
+
+        <!-- Copied Text Viewer Section -->
+        <section id="copied-text-section" class="bg-white bg-opacity-95 rounded-2xl shadow-2xl p-6 hidden">
+            <h2 class="text-2xl font-semibold text-blue-900 mb-6">Copied Text History</h2>
+            <ul id="copied-text-list" class="space-y-4 max-h-96 overflow-y-auto"></ul>
+            <button id="clear-copied-text" class="mt-4 py-2 px-4 bg-red-500 text-white rounded-lg hover:bg-red-600">Clear Copied Text History</button>
+        </section>
     </main>
-    <footer class="p-4 flex space-x-4">
-        {% if request.url.path.startswith('/dashboard') %}
-        <button id="clipboard-manager-btn" class="bg-blue-700 p-2 rounded hover:bg-blue-800">Clipboard Manager</button>
-        <button id="copied-text-viewer-btn" class="bg-blue-700 p-2 rounded hover:bg-blue-800">Copied Text Viewer</button>
-        {% endif %}
-        {% if request.cookies.get("user_id") %}
-        <a href="/user/logout" class="bg-red-700 p-2 rounded hover:bg-red-800">Logout</a>
-        {% elif request.cookies.get("admin") %}
-        <a href="/admin/logout" class="bg-red-700 p-2 rounded hover:bg-red-800">Logout</a>
-        {% endif %}
+
+    <footer class="bg-gradient-to-r from-blue-800 to-indigo-700 text-center py-4">
+        <div class="flex justify-center space-x-4 mb-2">
+            <button id="clipboard-manager-btn" class="py-2 px-4 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transform hover:scale-105 transition-all duration-300 active:bg-blue-800">Clipboard Manager</button>
+            <button id="copied-text-btn" class="py-2 px-4 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transform hover:scale-105 transition-all duration-300">Copied Text Viewer</button>
+        </div>
+        <p class="text-sm opacity-70">Made by Abhishek Sharma</p>
     </footer>
+
     <script src="/static/js/script.js"></script>
 </body>
 </html>
