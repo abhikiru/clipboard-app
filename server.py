@@ -27,7 +27,15 @@ DATABASE_URL = os.getenv("DATABASE_URL")
 if not DATABASE_URL:
     raise ValueError("DATABASE_URL not set")
 
-engine = create_engine(DATABASE_URL)
+print(f"Connecting to database with URL: {DATABASE_URL}")
+
+try:
+    engine = create_engine(DATABASE_URL)
+    print("Database connection successful")
+except Exception as e:
+    print(f"Failed to connect to database: {e}")
+    raise
+
 metadata = MetaData()
 
 # Define tables
@@ -57,7 +65,12 @@ copied_text_history = Table(
 )
 
 # Create tables
-metadata.create_all(engine)
+try:
+    metadata.create_all(engine)
+    print("Tables created successfully")
+except Exception as e:
+    print(f"Error creating tables: {e}")
+    raise
 
 # Set up database session
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
@@ -68,12 +81,21 @@ SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 async def startup_event():
     db = SessionLocal()
     try:
+        print("Starting database initialization")
         # Default admin
         if not db.execute(users.select().where(users.c.username == "admin1")).fetchone():
             db.execute(users.insert().values(username="admin1", password="adminpass1", role="admin"))
+            print("Default admin created: admin1/adminpass1")
+        else:
+            print("Admin user 'admin1' already exists")
+
         # Default user
         if not db.execute(users.select().where(users.c.username == "user1")).fetchone():
             db.execute(users.insert().values(username="user1", password="userpass1", role="user"))
+            print("Default user created: user1/userpass1")
+        else:
+            print("User 'user1' already exists")
+
         db.commit()
 
         # Log all users to verify
@@ -81,6 +103,8 @@ async def startup_event():
         print("Users in database on startup:")
         for user in all_users:
             print(f"ID: {user.id}, Username: {user.username}, Password: {user.password}, Role: {user.role}")
+    except Exception as e:
+        print(f"Error during startup: {e}")
     finally:
         db.close()
 
@@ -98,22 +122,41 @@ async def home(request: Request):
 
 @app.get("/admin", response_class=HTMLResponse)
 async def admin_login_page(request: Request, error: str = None):
+    print("Serving admin login page")
     return templates.TemplateResponse("admin_login.html", {"request": request, "error": error})
 
 
 @app.post("/admin/login")
 async def admin_login(request: Request):
     form = await request.form()
-    username = form.get("username")
-    password = form.get("password")
+    username = form.get("username").strip()
+    password = form.get("password").strip()
+
+    print(f"Admin login attempt - Username: {username}, Password: {password}")
 
     db = SessionLocal()
     try:
         user = db.execute(users.select().where(users.c.username == username)).fetchone()
-        if user and user.password == password and user.role == "admin":
-            request.session["user"] = {"username": username, "role": "admin"}
-            return templates.TemplateResponse("admin_dashboard.html", {"request": request, "users": get_all_users(db)})
-        return templates.TemplateResponse("admin_login.html", {"request": request, "error": "Invalid ID or password"})
+        if user:
+            print(f"User found - Username: {user.username}, Password: {user.password}, Role: {user.role}")
+            print(f"Comparing password: Input '{password}' vs Stored '{user.password}'")
+            if user.password == password and user.role == "admin":
+                print("Login successful, setting session")
+                request.session["user"] = {"username": username, "role": "admin"}
+                return templates.TemplateResponse("admin_dashboard.html",
+                                                  {"request": request, "users": get_all_users(db)})
+            else:
+                print("Login failed: Password or role mismatch")
+                return templates.TemplateResponse("admin_login.html",
+                                                  {"request": request, "error": "Invalid ID or password"})
+        else:
+            print(f"Login failed: User '{username}' not found in database")
+            return templates.TemplateResponse("admin_login.html",
+                                              {"request": request, "error": "Invalid ID or password"})
+    except Exception as e:
+        print(f"Error during admin login: {e}")
+        return templates.TemplateResponse("admin_login.html",
+                                          {"request": request, "error": "Server error during login"})
     finally:
         db.close()
 
@@ -121,10 +164,12 @@ async def admin_login(request: Request):
 @app.get("/admin/dashboard", response_class=HTMLResponse)
 async def admin_dashboard(request: Request):
     if request.session.get("user", {}).get("role") != "admin":
+        print("Admin dashboard access denied: Not authorized")
         raise HTTPException(status_code=403, detail="Not authorized")
 
     db = SessionLocal()
     try:
+        print("Serving admin dashboard")
         return templates.TemplateResponse("admin_dashboard.html", {"request": request, "users": get_all_users(db)})
     finally:
         db.close()
@@ -133,17 +178,21 @@ async def admin_dashboard(request: Request):
 @app.post("/admin/update_user")
 async def update_user(request: Request):
     if request.session.get("user", {}).get("role") != "admin":
+        print("Update user access denied: Not authorized")
         raise HTTPException(status_code=403, detail="Not authorized")
 
     form = await request.form()
     user_id = form.get("user_id")
-    new_username = form.get("username")
-    new_password = form.get("password")
+    new_username = form.get("username").strip()
+    new_password = form.get("password").strip()
+
+    print(f"Updating user - ID: {user_id}, New Username: {new_username}, New Password: {new_password}")
 
     db = SessionLocal()
     try:
         db.execute(users.update().where(users.c.id == user_id).values(username=new_username, password=new_password))
         db.commit()
+        print("User updated successfully")
         return templates.TemplateResponse("admin_dashboard.html", {"request": request, "users": get_all_users(db),
                                                                    "message": "User updated successfully"})
     finally:
@@ -152,22 +201,39 @@ async def update_user(request: Request):
 
 @app.get("/user/login", response_class=HTMLResponse)
 async def user_login_page(request: Request, error: str = None):
+    print("Serving user login page")
     return templates.TemplateResponse("user_login.html", {"request": request, "error": error})
 
 
 @app.post("/user/login")
 async def user_login(request: Request):
     form = await request.form()
-    username = form.get("username")
-    password = form.get("password")
+    username = form.get("username").strip()
+    password = form.get("password").strip()
+
+    print(f"User login attempt - Username: {username}, Password: {password}")
 
     db = SessionLocal()
     try:
         user = db.execute(users.select().where(users.c.username == username)).fetchone()
-        if user and user.password == password and user.role == "user":
-            request.session["user"] = {"username": username, "role": "user"}
-            return templates.TemplateResponse("user_dashboard.html", {"request": request, "username": username})
-        return templates.TemplateResponse("user_login.html", {"request": request, "error": "Invalid ID or password"})
+        if user:
+            print(f"User found - Username: {user.username}, Password: {user.password}, Role: {user.role}")
+            print(f"Comparing password: Input '{password}' vs Stored '{user.password}'")
+            if user.password == password and user.role == "user":
+                print("Login successful, setting session")
+                request.session["user"] = {"username": username, "role": "user"}
+                return templates.TemplateResponse("user_dashboard.html", {"request": request, "username": username})
+            else:
+                print("Login failed: Password or role mismatch")
+                return templates.TemplateResponse("user_login.html",
+                                                  {"request": request, "error": "Invalid ID or password"})
+        else:
+            print(f"Login failed: User '{username}' not found in database")
+            return templates.TemplateResponse("user_login.html",
+                                              {"request": request, "error": "Invalid ID or password"})
+    except Exception as e:
+        print(f"Error during user login: {e}")
+        return templates.TemplateResponse("user_login.html", {"request": request, "error": "Server error during login"})
     finally:
         db.close()
 
@@ -175,7 +241,9 @@ async def user_login(request: Request):
 @app.get("/user/dashboard", response_class=HTMLResponse)
 async def user_dashboard(request: Request):
     if request.session.get("user", {}).get("role") != "user":
+        print("User dashboard access denied: Not authorized")
         raise HTTPException(status_code=403, detail="Not authorized")
+    print("Serving user dashboard")
     return templates.TemplateResponse("user_dashboard.html",
                                       {"request": request, "username": request.session["user"]["username"]})
 
