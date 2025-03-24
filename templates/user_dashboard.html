@@ -4,52 +4,45 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>User Dashboard - Clipboard Manager</title>
-    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="/static/css/styles.css">
-    <link rel="icon" href="/static/favicon.ico">
+    <link rel="stylesheet" href="/static/styles.css">
 </head>
 <body>
-    <header>
-        <h1>Clipboard Manager</h1>
-        <p>Logged in as: {{ username }}</p>
-    </header>
+    <div class="container">
+        <h1>User Dashboard</h1>
+        <p>Welcome, {{ username }}!</p>
 
-    <main>
-        <!-- Clipboard Manager Section -->
-        <section id="clipboard-manager-section" class="container">
-            <h2>Clipboard Manager</h2>
-            <div class="form-section">
-                <textarea id="text-input" rows="4" placeholder="Type your text here..."></textarea>
-                <select id="action-mode">
-                    <option value="copy">Copy to Clipboard</option>
-                    <option value="history">Add to History</option>
-                    <option value="both">Both</option>
-                </select>
-                <button id="submit-btn">Submit</button>
-            </div>
-            <div class="history">
-                <h3>Text History</h3>
-                <ul id="history-list" class="history-list"></ul>
-                <button id="clear-history" class="clear-btn">Clear History</button>
-            </div>
-        </section>
-
-        <!-- Copied Text Viewer Section -->
-        <section id="copied-text-section" class="container" style="display: none;">
-            <h2>Copied Text History</h2>
-            <ul id="copied-text-list" class="history-list"></ul>
-            <button id="clear-copied-text" class="clear-btn">Clear Copied Text History</button>
-        </section>
-    </main>
-
-    <footer>
-        <div class="footer-buttons">
-            <button id="clipboard-manager-btn" class="footer-btn active">Clipboard Manager</button>
-            <button id="copied-text-btn" class="footer-btn">Copied Text Viewer</button>
+        <!-- Form to submit new text -->
+        <div>
+            <h2>Submit Text</h2>
+            <textarea id="textInput" rows="4" cols="50" placeholder="Enter text to submit"></textarea>
+            <br>
+            <button onclick="submitText('{{ username }}')">Submit</button>
         </div>
-        <p>Made by Abhishek Sharma</p>
-    </footer>
 
-    <script src="/static/js/script.js"></script>
+        <!-- Display history -->
+        <div>
+            <h2>History</h2>
+            <ul id="historyList"></ul>
+            <button onclick="clearHistory('{{ username }}')">Clear History</button>
+        </div>
+
+        <!-- Display copied text history -->
+        <div>
+            <h2>Copied Text History</h2>
+            <ul id="copiedTextList"></ul>
+            <button onclick="clearCopiedText('{{ username }}')">Clear Copied Text History</button>
+        </div>
+
+        <p><a href="/">Logout</a></p>
+    </div>
+
+    <script src="/static/script.js"></script>
+    <script>
+        // Fetch history and copied text on page load
+        window.onload = function() {
+            fetchHistory('{{ username }}');
+            fetchCopiedText('{{ username }}');
+        };
+    </script>
 </body>
 </html>
