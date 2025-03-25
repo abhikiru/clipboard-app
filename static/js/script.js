@@ -84,7 +84,9 @@ copiedTextBtn.addEventListener('click', showCopiedText);
 // Load history (Clipboard Manager)
 async function loadHistory() {
     try {
-        const response = await fetch(`/api/history/${username}`);
+        const response = await fetch(`/api/history/${username}`, {
+            credentials: 'include', // Include session cookies
+        });
         if (!response.ok) {
             throw new Error(`HTTP error! Status: ${response.status}`);
         }
@@ -105,7 +107,9 @@ async function loadHistory() {
 // Load copied text history
 async function loadCopiedText() {
     try {
-        const response = await fetch(`/api/history/${username}`);
+        const response = await fetch(`/api/history/${username}`, {
+            credentials: 'include', // Include session cookies
+        });
         if (!response.ok) {
             throw new Error(`HTTP error! Status: ${response.status}`);
         }
@@ -158,6 +162,7 @@ function addToHistory(text) {
             const response = await fetch(`/api/delete_history/${username}`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
+                credentials: 'include', // Include session cookies
                 body: JSON.stringify({ text }),
             });
             if (!response.ok) {
@@ -209,6 +214,7 @@ function addToCopiedText(text) {
             const response = await fetch(`/api/delete_copied_text/${username}`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
+                credentials: 'include', // Include session cookies
                 body: JSON.stringify({ text }),
             });
             if (!response.ok) {
@@ -234,7 +240,10 @@ function addToCopiedText(text) {
 clearHistoryBtn.addEventListener('click', async () => {
     historyList.innerHTML = '';
     try {
-        const response = await fetch(`/api/clear_history/${username}`, { method: 'POST' });
+        const response = await fetch(`/api/clear_history/${username}`, {
+            method: 'POST',
+            credentials: 'include', // Include session cookies
+        });
         if (!response.ok) {
             throw new Error(`HTTP error! Status: ${response.status}`);
         }
@@ -248,7 +257,10 @@ clearHistoryBtn.addEventListener('click', async () => {
 clearCopiedTextBtn.addEventListener('click', async () => {
     copiedTextList.innerHTML = '';
     try {
-        const response = await fetch(`/api/clear_copied_text/${username}`, { method: 'POST' });
+        const response = await fetch(`/api/clear_copied_text/${username}`, {
+            method: 'POST',
+            credentials: 'include', // Include session cookies
+        });
         if (!response.ok) {
             throw new Error(`HTTP error! Status: ${response.status}`);
         }
@@ -270,10 +282,11 @@ submitBtn.addEventListener('click', async () => {
     errorMessage.textContent = ''; // Clear previous errors
 
     try {
-        // Always add to history
+        // Add to history
         const historyResponse = await fetch(`/api/submit/${username}`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
+            credentials: 'include', // Include session cookies
             body: JSON.stringify({ text }),
         });
         if (!historyResponse.ok) {
@@ -284,10 +297,11 @@ submitBtn.addEventListener('click', async () => {
             throw new Error(historyData.message || 'Failed to add to history');
         }
 
-        // Always copy to clipboard (via copied_text_history)
+        // Copy to clipboard (via copied_text_history)
         const copiedTextResponse = await fetch(`/api/submit_copied_text/${username}`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
+            credentials: 'include', // Include session cookies
             body: JSON.stringify({ text }),
         });
         if (!copiedTextResponse.ok) {
