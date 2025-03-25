@@ -267,7 +267,7 @@ async def update_user(request: Request):
             return templates.TemplateResponse("admin_dashboard.html", {
                 "request": request,
                 "users": get_all_users(db),
-                "message": f"Username '{new_username}' already exists"
+                "message": f"Username '{new_username}' already  already exists"
             })
 
         # Update the user
@@ -434,8 +434,16 @@ async def get_user_history(username: str):
     try:
         user_history = db.execute(history_table.select().where(history_table.c.username == username)).fetchone()
         if user_history:
-            history = json.loads(user_history.history) if user_history.history else []
-            copied_text_history = json.loads(user_history.copied_text_history) if user_history.copied_text_history else []
+            try:
+                history = json.loads(user_history.history) if user_history.history else []
+            except json.JSONDecodeError as json_err:
+                print(f"Invalid JSON in history for {username}: {user_history.history}, Error: {json_err}")
+                history = []
+            try:
+                copied_text_history = json.loads(user_history.copied_text_history) if user_history.copied_text_history else []
+            except json.JSONDecodeError as json_err:
+                print(f"Invalid JSON in copied_text_history for {username}: {user_history.copied_text_history}, Error: {json_err}")
+                copied_text_history = []
             return JSONResponse(content={
                 "status": "success",
                 "history": history,
@@ -444,7 +452,7 @@ async def get_user_history(username: str):
         return JSONResponse(content={"status": "success", "history": [], "copied_text_history": []})
     except Exception as e:
         print(f"Error fetching history for {username}: {e}")
-        return JSONResponse(content={"status": "error", "message": "Error fetching history"}, status_code=500)
+        return JSONResponse(content={"status": "error", "message": f"Error fetching history: {str(e)}"}, status_code=500)
     finally:
         db.close()
 
@@ -456,7 +464,11 @@ async def submit_clipboard_data(username: str, item: HistoryItem):
     try:
         user_history = db.execute(history_table.select().where(history_table.c.username == username)).fetchone()
         if user_history:
-            current_history = json.loads(user_history.history) if user_history.history else []
+            try:
+                current_history = json.loads(user_history.history) if user_history.history else []
+            except json.JSONDecodeError as json_err:
+                print(f"Invalid JSON in history for {username}: {user_history.history}, Error: {json_err}")
+                current_history = []
             current_history.insert(0, item.text)
             if len(current_history) > 50:  # Limit to 50 items
                 current_history = current_history[:50]
@@ -477,7 +489,7 @@ async def submit_clipboard_data(username: str, item: HistoryItem):
     except Exception as e:
         db.rollback()
         print(f"Error submitting clipboard data for {username}: {e}")
-        return JSONResponse(content={"status": "error", "message": "Error submitting data"}, status_code=500)
+        return JSONResponse(content={"status": "error", "message": f"Error submitting data: {str(e)}"}, status_code=500)
     finally:
         db.close()
 
@@ -491,7 +503,7 @@ async def copy_to_clipboard(username: str, item: HistoryItem):
         return JSONResponse(content={"status": "success", "message": "Text sent to clipboard"})
     except Exception as e:
         print(f"Error sending text to clipboard for {username}: {e}")
-        return JSONResponse(content={"status": "error", "message": "Error sending text to clipboard"}, status_code=500)
+        return JSONResponse(content={"status": "error", "message": f"Error sending text to clipboard: {str(e)}"}, status_code=500)
 
 # API endpoint to submit new copied text (used by the desktop app)
 @app.post("/api/submit_copied_text/{username}")
@@ -501,7 +513,11 @@ async def submit_copied_text(username: str, item: HistoryItem):
     try:
         user_history = db.execute(history_table.select().where(history_table.c.username == username)).fetchone()
         if user_history:
-            current_history = json.loads(user_history.copied_text_history) if user_history.copied_text_history else []
+            try:
+                current_history = json.loads(user_history.copied_text_history) if user_history.copied_text_history else []
+            except json.JSONDecodeError as json_err:
+                print(f"Invalid JSON in copied_text_history for {username}: {user_history.copied_text_history}, Error: {json_err}")
+                current_history = []
             current_history.insert(0, item.text)
             if len(current_history) > 50:  # Limit to 50 items
                 current_history = current_history[:50]
@@ -522,7 +538,7 @@ async def submit_copied_text(username: str, item: HistoryItem):
     except Exception as e:
         db.rollback()
         print(f"Error submitting copied text for {username}: {e}")
-        return JSONResponse(content={"status": "error", "message": "Error submitting data"}, status_code=500)
+        return JSONResponse(content={"status": "error", "message": f"Error submitting data: {str(e)}"}, status_code=500)
     finally:
         db.close()
 
@@ -533,7 +549,11 @@ async def delete_history(username: str, item: HistoryItem):
     try:
         user_history = db.execute(history_table.select().where(history_table.c.username == username)).fetchone()
         if user_history:
-            current_history = json.loads(user_history.history) if user_history.history else []
+            try:
+                current_history = json.loads(user_history.history) if user_history.history else []
+            except json.JSONDecodeError as json_err:
+                print(f"Invalid JSON in history for {username}: {user_history.history}, Error: {json_err}")
+                current_history = []
             if item.text in current_history:
                 current_history.remove(item.text)
                 db.execute(
@@ -546,7 +566,7 @@ async def delete_history(username: str, item: HistoryItem):
     except Exception as e:
         db.rollback()
         print(f"Error deleting history for {username}: {e}")
-        return JSONResponse(content={"status": "error", "message": "Error deleting history"}, status_code=500)
+        return JSONResponse(content={"status": "error", "message": f"Error deleting history: {str(e)}"}, status_code=500)
     finally:
         db.close()
 
@@ -557,7 +577,11 @@ async def delete_copied_text(username: str, item: HistoryItem):
     try:
         user_history = db.execute(history_table.select().where(history_table.c.username == username)).fetchone()
         if user_history:
-            current_history = json.loads(user_history.copied_text_history) if user_history.copied_text_history else []
+            try:
+                current_history = json.loads(user_history.copied_text_history) if user_history.copied_text_history else []
+            except json.JSONDecodeError as json_err:
+                print(f"Invalid JSON in copied_text_history for {username}: {user_history.copied_text_history}, Error: {json_err}")
+                current_history = []
             if item.text in current_history:
                 current_history.remove(item.text)
                 db.execute(
@@ -570,7 +594,7 @@ async def delete_copied_text(username: str, item: HistoryItem):
     except Exception as e:
         db.rollback()
         print(f"Error deleting copied text for {username}: {e}")
-        return JSONResponse(content={"status": "error", "message": "Error deleting copied text"}, status_code=500)
+        return JSONResponse(content={"status": "error", "message": f"Error deleting copied text: {str(e)}"}, status_code=500)
     finally:
         db.close()
 
@@ -589,7 +613,7 @@ async def clear_history(username: str):
     except Exception as e:
         db.rollback()
         print(f"Error clearing history for {username}: {e}")
-        return JSONResponse(content={"status": "error", "message": "Error clearing history"}, status_code=500)
+        return JSONResponse(content={"status": "error", "message": f"Error clearing history: {str(e)}"}, status_code=500)
     finally:
         db.close()
 
@@ -608,7 +632,7 @@ async def clear_copied_text(username: str):
     except Exception as e:
         db.rollback()
         print(f"Error clearing copied text for {username}: {e}")
-        return JSONResponse(content={"status": "error", "message": "Error clearing copied text"}, status_code=500)
+        return JSONResponse(content={"status": "error", "message": f"Error clearing copied text: {str(e)}"}, status_code=500)
     finally:
         db.close()
 

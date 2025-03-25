@@ -6,8 +6,8 @@ import threading
 import time
 
 # Configuration
-API_BASE_URL = "https://clipboard-app-seven.vercel.app"
-WS_URL = "wss://clipboard-app-seven.vercel.app/ws"
+API_BASE_URL = "https://clipboard-rbvg372nu-abhishek-sharmas-projects-2069d670.vercel.app"
+WS_URL = "wss://clipboard-rbvg372nu-abhishek-sharmas-projects-2069d670.vercel.app/ws"
 
 class ClipboardManager:
     def __init__(self):

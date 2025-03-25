@@ -19,7 +19,7 @@ let ws = null;
 
 // WebSocket Connection
 function connectWebSocket() {
-    ws = new WebSocket(`wss://clipboard-app-seven.vercel.app/ws/${username}`);
+    ws = new WebSocket(`wss://clipboard-rbvg372nu-abhishek-sharmas-projects-2069d670.vercel.app/ws/${username}`);
     ws.onopen = () => {
         console.log('WebSocket connected');
     };
