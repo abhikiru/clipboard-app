@@ -15,6 +15,7 @@ errorMessage.className = 'error';
 clipboardManagerSection.appendChild(errorMessage);
 
 const username = document.querySelector('header p').textContent.split(': ')[1];
+let pollingInterval = null; // For polling the copied text history
 
 // Toggle Sections
 function showClipboardManager() {
@@ -23,6 +24,11 @@ function showClipboardManager() {
     clipboardManagerBtn.classList.add('active');
     copiedTextBtn.classList.remove('active');
     loadSubmittedTextHistory(); // Load submitted text history when tab is opened
+    // Stop polling when leaving the Copied Text Viewer
+    if (pollingInterval) {
+        clearInterval(pollingInterval);
+        pollingInterval = null;
+    }
 }
 
 function showCopiedText() {
@@ -31,6 +37,10 @@ function showCopiedText() {
     clipboardManagerBtn.classList.remove('active');
     copiedTextBtn.classList.add('active');
     loadCopiedText(); // Load copied text when tab is opened
+    // Start polling to refresh the copied text history every 2 seconds
+    if (!pollingInterval) {
+        pollingInterval = setInterval(loadCopiedText, 2000);
+    }
 }
 
 clipboardManagerBtn.addEventListener('click', showClipboardManager);
@@ -77,7 +87,7 @@ async function loadCopiedText() {
         }
         const data = await response.json();
         if (data.status === 'success') {
-            copiedTextList.innerHTML = '';
+            copiedTextList.innerHTML = ''; // Clear existing items
             const copiedTextHistory = data.copied_text_history || [];
             if (copiedTextHistory.length === 0) {
                 const emptyItem = document.createElement('li');
@@ -150,7 +160,7 @@ function addToSubmittedTextHistory(text) {
         emptyItem.remove();
     }
 
-    historyList.insertBefore(listItem, historyList.firstChild);
+    historyList.insertBefore(listItem, historyList.firstChild); // Add to top (LIFO)
 }
 
 // Add to Copied Text History (Text Viewer)
@@ -206,7 +216,7 @@ function addToCopiedText(text) {
         emptyItem.remove();
     }
 
-    copiedTextList.insertBefore(listItem, copiedTextList.firstChild);
+    copiedTextList.insertBefore(listItem, copiedTextList.firstChild); // Add to top (LIFO)
 }
 
 // Clear Submitted Text History (Clipboard Manager)
@@ -279,6 +289,7 @@ submitBtn.addEventListener('click', async () => {
             if (clipboardData.status !== 'success') {
                 throw new Error(clipboardData.message || 'Failed to send to clipboard');
             }
+            alert('Text sent to system clipboard!');
         }
 
         if (mode === 'add-to-history' || mode === 'both') {
@@ -292,15 +303,14 @@ submitBtn.addEventListener('click', async () => {
             if (!historyResponse.ok) {
                 throw new Error(`HTTP error! Status: ${historyResponse.status}`);
             }
-            const historyData = await response.json();
+            const historyData = await historyResponse.json();
             if (historyData.status !== 'success') {
                 throw new Error(historyData.message || 'Failed to add to submitted text history');
             }
             addToSubmittedTextHistory(text); // Add to UI immediately
         }
 
-        alert('Text processed successfully!');
-        textInput.value = '';
+        textInput.value = ''; // Clear input after submission
     } catch (error) {
         console.error('Error submitting text:', error);
         errorMessage.textContent = `Error submitting text: ${error.message}`;
