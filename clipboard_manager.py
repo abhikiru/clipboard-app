@@ -31,9 +31,9 @@ class ClipboardManager:
         elif data["type"] == "copied_text_update":
             self.copied_text_history.insert(0, data["text"])
             print(f"New copied text item added: {data['text']}")
-            # Automatically copy the new item to the system clipboard
+        elif data["type"] == "copy_to_clipboard":
             pyperclip.copy(data["text"])
-            print(f"Automatically copied to clipboard: {data['text']}")
+            print(f"Copied to system clipboard: {data['text']}")
         elif data["type"] == "history_delete":
             if data["text"] in self.history:
                 self.history.remove(data["text"])
@@ -158,13 +158,6 @@ class ClipboardManager:
             if data["status"] == "success":
                 self.history = data["history"]
                 self.copied_text_history = data["copied_text_history"]
-                # Automatically copy the most recent item from copied_text_history to the system clipboard
-                if self.copied_text_history:
-                    most_recent_item = self.copied_text_history[0]
-                    pyperclip.copy(most_recent_item)
-                    print(f"Automatically copied most recent item to clipboard: {most_recent_item}")
-                else:
-                    print("No items in copied text history to copy.")
                 return True
             else:
                 print(f"Error: {data['message']}")

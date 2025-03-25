@@ -263,8 +263,9 @@ submitBtn.addEventListener('click', async () => {
     errorMessage.textContent = ''; // Clear previous errors
 
     try {
+        // Handle "Copy to Clipboard"
         if (mode === 'copy' || mode === 'both') {
-            const response = await fetch(`/api/submit_copied_text/${username}`, {
+            const response = await fetch(`/api/copy_to_clipboard/${username}`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ text }),
@@ -274,11 +275,12 @@ submitBtn.addEventListener('click', async () => {
             }
             const data = await response.json();
             if (data.status !== 'success') {
-                throw new Error(data.message || 'Failed to add to copied text history');
+                throw new Error(data.message || 'Failed to copy to clipboard');
             }
-            alert('Text added to copied text history!');
+            alert('Text sent to system clipboard!');
         }
 
+        // Handle "Copy to History"
         if (mode === 'history' || mode === 'both') {
             const response = await fetch(`/api/submit/${username}`, {
                 method: 'POST',
