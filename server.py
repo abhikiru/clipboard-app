@@ -13,15 +13,15 @@ import json
 # Initialize FastAPI app
 app = FastAPI()
 
-# Add CORS middleware to allow requests from the desktop app
+# Add CORS middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Allow all origins (for testing; restrict in production)
+    allow_origins=["https://clipboard-app-seven.vercel.app"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
-app.add_middleware(SessionMiddleware, secret_key="your-secret-key")  # Replace with a secure key later
+app.add_middleware(SessionMiddleware, secret_key="your-secret-key")  # Replace with a secure key
 
 # Serve static files
 app.mount("/static", StaticFiles(directory="static"), name="static")
@@ -428,7 +428,9 @@ async def authenticate_user(request: Request):
 
 # API endpoint to fetch clipboard history for a user
 @app.get("/api/history/{username}")
-async def get_user_history(username: str):
+async def get_user_history(username: str, request: Request):
+    if "user" not in request.session or request.session["user"]["username"] != username:
+        raise HTTPException(status_code=403, detail="Not authorized")
     db = SessionLocal()
     try:
         # Fetch history
@@ -448,22 +450,24 @@ async def get_user_history(username: str):
     finally:
         db.close()
 
-# API endpoint to submit new clipboard data
+# API endpoint to submit new clipboard data (from Clipboard Manager)
 @app.post("/api/submit/{username}")
-async def submit_clipboard_data(username: str, item: HistoryItem):
+async def submit_clipboard_data(username: str, item: HistoryItem, request: Request):
+    if "user" not in request.session or request.session["user"]["username"] != username:
+        raise HTTPException(status_code=403, detail="Not authorized")
     db = SessionLocal()
     try:
         db.execute(history.insert().values(username=username, text=item.text))
         db.commit()
         # Enforce max 10 history items
-        items = db.execute(history.select().where(history.c.username == username)).fetchall()
+        items = db.execute(history.select().where(history.c.username == username).order_by(history.c.id)).fetchall()
         if len(items) > 10:
             items_to_delete = len(items) - 10
             db.execute(history.delete().where(history.c.username == username).where(history.c.id.in_(
-                [item.id for item in sorted(items, key=lambda x: x.id)[:items_to_delete]]
+                [item.id for item in items[:items_to_delete]]
             )))
             db.commit()
-        # Broadcast the update to the connected client
+        # Broadcast the update to the connected client (to copy to system clipboard)
         await broadcast_to_user(username, {"type": "history_update", "text": item.text})
         return JSONResponse(content={"status": "success", "message": "Clipboard data submitted"})
     except Exception as e:
@@ -480,15 +484,15 @@ async def submit_copied_text(username: str, item: HistoryItem):
         db.execute(copied_text_history.insert().values(username=username, text=item.text))
         db.commit()
         # Enforce max 10 copied text items
-        items = db.execute(copied_text_history.select().where(copied_text_history.c.username == username)).fetchall()
+        items = db.execute(copied_text_history.select().where(copied_text_history.c.username == username).order_by(copied_text_history.c.id)).fetchall()
         if len(items) > 10:
             items_to_delete = len(items) - 10
             db.execute(copied_text_history.delete().where(copied_text_history.c.username == username).where(
                 copied_text_history.c.id.in_(
-                    [item.id for item in sorted(items, key=lambda x: x.id)[:items_to_delete]]
+                    [item.id for item in items[:items_to_delete]]
                 )))
             db.commit()
-        # Broadcast the update to the connected client
+        # Broadcast the update to the connected client (to show in Text Viewer)
         await broadcast_to_user(username, {"type": "copied_text_update", "text": item.text})
         return JSONResponse(content={"status": "success", "message": "Copied text submitted"})
     except Exception as e:
@@ -497,48 +501,11 @@ async def submit_copied_text(username: str, item: HistoryItem):
     finally:
         db.close()
 
-# API endpoint to update history (used by the website)
-@app.post("/update-history/{username}")
-async def update_history(username: str, item: HistoryItem):
-    db = SessionLocal()
-    try:
-        db.execute(history.insert().values(username=username, text=item.text))
-        db.commit()
-
-        # Enforce max 10 history items
-        items = db.execute(history.select().where(history.c.username == username)).fetchall()
-        if len(items) > 10:
-            items_to_delete = len(items) - 10
-            db.execute(history.delete().where(history.c.username == username).where(history.c.id.in_(
-                [item.id for item in sorted(items, key=lambda x: x.id)[:items_to_delete]]
-            )))
-            db.commit()
-        # Broadcast the update to the connected client
-        await broadcast_to_user(username, {"type": "history_update", "text": item.text})
-        return JSONResponse(content={"status": "success", "message": "History updated"})
-    except Exception as e:
-        print(f"Error updating history for {username}: {e}")
-        return JSONResponse(content={"status": "error", "message": "Error updating history"}, status_code=500)
-    finally:
-        db.close()
-
-# API endpoint to fetch history (used by the website)
-@app.get("/fetch-history/{username}")
-async def fetch_history(username: str):
-    db = SessionLocal()
-    try:
-        items = db.execute(
-            history.select().where(history.c.username == username).order_by(history.c.id.desc())).fetchall()
-        return JSONResponse(content={"status": "success", "history": [item.text for item in items]})
-    except Exception as e:
-        print(f"Error fetching history for {username}: {e}")
-        return JSONResponse(content={"status": "error", "message": "Error fetching history"}, status_code=500)
-    finally:
-        db.close()
-
-# API endpoint to delete a history item (used by the website)
-@app.post("/delete-history/{username}")
-async def delete_history(username: str, item: HistoryItem):
+# API endpoint to delete a history item
+@app.post("/api/delete_history/{username}")
+async def delete_history(username: str, item: HistoryItem, request: Request):
+    if "user" not in request.session or request.session["user"]["username"] != username:
+        raise HTTPException(status_code=403, detail="Not authorized")
     db = SessionLocal()
     try:
         db.execute(history.delete().where(history.c.username == username).where(history.c.text == item.text))
@@ -552,9 +519,11 @@ async def delete_history(username: str, item: HistoryItem):
     finally:
         db.close()
 
-# API endpoint to clear history (used by the website)
-@app.post("/clear-history/{username}")
-async def clear_history(username: str):
+# API endpoint to clear history
+@app.post("/api/clear_history/{username}")
+async def clear_history(username: str, request: Request):
+    if "user" not in request.session or request.session["user"]["username"] != username:
+        raise HTTPException(status_code=403, detail="Not authorized")
     db = SessionLocal()
     try:
         db.execute(history.delete().where(history.c.username == username))
@@ -568,49 +537,11 @@ async def clear_history(username: str):
     finally:
         db.close()
 
-# API endpoint to update copied text (used by the website)
-@app.post("/update-copied-text/{username}")
-async def update_copied_text(username: str, item: HistoryItem):
-    db = SessionLocal()
-    try:
-        db.execute(copied_text_history.insert().values(username=username, text=item.text))
-        db.commit()
-
-        # Enforce max 10 copied text items
-        items = db.execute(copied_text_history.select().where(copied_text_history.c.username == username)).fetchall()
-        if len(items) > 10:
-            items_to_delete = len(items) - 10
-            db.execute(copied_text_history.delete().where(copied_text_history.c.username == username).where(
-                copied_text_history.c.id.in_(
-                    [item.id for item in sorted(items, key=lambda x: x.id)[:items_to_delete]]
-                )))
-            db.commit()
-        # Broadcast the update to the connected client
-        await broadcast_to_user(username, {"type": "copied_text_update", "text": item.text})
-        return JSONResponse(content={"status": "success", "message": "Copied text updated"})
-    except Exception as e:
-        print(f"Error updating copied text for {username}: {e}")
-        return JSONResponse(content={"status": "error", "message": "Error updating copied text"}, status_code=500)
-    finally:
-        db.close()
-
-# API endpoint to fetch copied text (used by the website)
-@app.get("/fetch-copied-text/{username}")
-async def fetch_copied_text(username: str):
-    db = SessionLocal()
-    try:
-        items = db.execute(copied_text_history.select().where(copied_text_history.c.username == username).order_by(
-            copied_text_history.c.id.desc())).fetchall()
-        return JSONResponse(content={"status": "success", "history": [item.text for item in items]})
-    except Exception as e:
-        print(f"Error fetching copied text for {username}: {e}")
-        return JSONResponse(content={"status": "error", "message": "Error fetching copied text"}, status_code=500)
-    finally:
-        db.close()
-
-# API endpoint to delete a copied text item (used by the website)
-@app.post("/delete-copied-text/{username}")
-async def delete_copied_text(username: str, item: HistoryItem):
+# API endpoint to delete a copied text item
+@app.post("/api/delete_copied_text/{username}")
+async def delete_copied_text(username: str, item: HistoryItem, request: Request):
+    if "user" not in request.session or request.session["user"]["username"] != username:
+        raise HTTPException(status_code=403, detail="Not authorized")
     db = SessionLocal()
     try:
         db.execute(copied_text_history.delete().where(copied_text_history.c.username == username).where(
@@ -625,9 +556,11 @@ async def delete_copied_text(username: str, item: HistoryItem):
     finally:
         db.close()
 
-# API endpoint to clear copied text (used by the website)
-@app.post("/clear-copied-text/{username}")
-async def clear_copied_text(username: str):
+# API endpoint to clear copied text
+@app.post("/api/clear_copied_text/{username}")
+async def clear_copied_text(username: str, request: Request):
+    if "user" not in request.session or request.session["user"]["username"] != username:
+        raise HTTPException(status_code=403, detail="Not authorized")
     db = SessionLocal()
     try:
         db.execute(copied_text_history.delete().where(copied_text_history.c.username == username))
