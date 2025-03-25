@@ -1,4 +1,19 @@
 {
+  "version": 2,
+  "builds": [
+    {
+      "src": "server.py",
+      "use": "@vercel/python",
+      "config": {
+        "maxLambdaSize": "15mb",
+        "runtime": "python3.11"
+      }
+    },
+    {
+      "src": "static/**",
+      "use": "@vercel/static"
+    }
+  ],
   "routes": [
     {
       "src": "/ws/(.*)",
@@ -6,7 +21,15 @@
       "websocket": true
     },
     {
+      "src": "/static/(.*)",
+      "dest": "/static/$1"
+    },
+    {
       "src": "/(.*)",
       "dest": "/server.py"
     }
-  ]
+  ],
+  "env": {
+    "PYTHONPATH": "."
+  }
+}
