@@ -6,8 +6,8 @@ import threading
 import time
 
 # Configuration
-API_BASE_URL = "https://clipboard-rbvg372nu-abhishek-sharmas-projects-2069d670.vercel.app"
-WS_URL = "wss://clipboard-rbvg372nu-abhishek-sharmas-projects-2069d670.vercel.app/ws"
+API_BASE_URL = "https://clipboard-app-seven.vercel.app"
+WS_URL = "wss://clipboard-app-seven.vercel.app/ws"
 
 class ClipboardManager:
     def __init__(self):
@@ -25,18 +25,15 @@ class ClipboardManager:
         """Handle incoming WebSocket messages."""
         data = json.loads(message)
         print(f"\n[WebSocket] Received update: {data}")
-        if data["type"] == "ping":
-            ws.send(json.dumps({"type": "pong"}))
-            return
         if data["type"] == "history_update":
             self.history.insert(0, data["text"])
             print(f"New history item added: {data['text']}")
         elif data["type"] == "copied_text_update":
             self.copied_text_history.insert(0, data["text"])
             print(f"New copied text item added: {data['text']}")
-        elif data["type"] == "copy_to_clipboard":
+            # Automatically copy the new item to the system clipboard
             pyperclip.copy(data["text"])
-            print(f"Copied to system clipboard: {data['text']}")
+            print(f"Automatically copied to clipboard: {data['text']}")
         elif data["type"] == "history_delete":
             if data["text"] in self.history:
                 self.history.remove(data["text"])
@@ -161,6 +158,13 @@ class ClipboardManager:
             if data["status"] == "success":
                 self.history = data["history"]
                 self.copied_text_history = data["copied_text_history"]
+                # Automatically copy the most recent item from copied_text_history to the system clipboard
+                if self.copied_text_history:
+                    most_recent_item = self.copied_text_history[0]
+                    pyperclip.copy(most_recent_item)
+                    print(f"Automatically copied most recent item to clipboard: {most_recent_item}")
+                else:
+                    print("No items in copied text history to copy.")
                 return True
             else:
                 print(f"Error: {data['message']}")

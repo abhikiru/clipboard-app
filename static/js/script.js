@@ -19,17 +19,13 @@ let ws = null;
 
 // WebSocket Connection
 function connectWebSocket() {
-    ws = new WebSocket(`wss://clipboard-rbvg372nu-abhishek-sharmas-projects-2069d670.vercel.app/ws/${username}`);
+    ws = new WebSocket(`wss://clipboard-app-seven.vercel.app/ws/${username}`);
     ws.onopen = () => {
         console.log('WebSocket connected');
     };
     ws.onmessage = (event) => {
         const data = JSON.parse(event.data);
         console.log('WebSocket message received:', data);
-        if (data.type === 'ping') {
-            ws.send(JSON.stringify({ type: 'pong' }));
-            return;
-        }
         if (data.type === 'history_update') {
             addToHistory(data.text);
         } else if (data.type === 'copied_text_update') {
@@ -267,9 +263,8 @@ submitBtn.addEventListener('click', async () => {
     errorMessage.textContent = ''; // Clear previous errors
 
     try {
-        // Handle "Copy to Clipboard"
         if (mode === 'copy' || mode === 'both') {
-            const response = await fetch(`/api/copy_to_clipboard/${username}`, {
+            const response = await fetch(`/api/submit_copied_text/${username}`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ text }),
@@ -279,12 +274,11 @@ submitBtn.addEventListener('click', async () => {
             }
             const data = await response.json();
             if (data.status !== 'success') {
-                throw new Error(data.message || 'Failed to copy to clipboard');
+                throw new Error(data.message || 'Failed to add to copied text history');
             }
-            alert('Text sent to system clipboard!');
+            alert('Text added to copied text history!');
         }
 
-        // Handle "Copy to History"
         if (mode === 'history' || mode === 'both') {
             const response = await fetch(`/api/submit/${username}`, {
                 method: 'POST',
