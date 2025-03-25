@@ -1,5 +1,5 @@
 import os
-from fastapi import FastAPI, Request, HTTPException
+from fastapi import FastAPI, Request, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
 from fastapi.middleware.cors import CORSMiddleware
@@ -8,6 +8,7 @@ from fastapi.staticfiles import StaticFiles
 from sqlalchemy import create_engine, Column, Integer, String, MetaData, Table
 from sqlalchemy.orm import sessionmaker
 from pydantic import BaseModel
+import json
 
 # Initialize FastAPI app
 app = FastAPI()
@@ -29,7 +30,7 @@ app.mount("/static", StaticFiles(directory="static"), name="static")
 templates = Jinja2Templates(directory="templates")
 
 # Database connection (Neon)
-DATABASE_URL = os.getenv("DATABASE_URL")
+DATABASE_URL = os.getenv("DATABASE_URL").replace("postgresql://", "postgresql+psycopg://")
 if not DATABASE_URL:
     raise ValueError("DATABASE_URL not set")
 
@@ -81,6 +82,8 @@ except Exception as e:
 # Set up database session
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
+# WebSocket clients
+connected_clients = {}
 
 # Create default admin and user on startup
 @app.on_event("startup")
@@ -114,23 +117,41 @@ async def startup_event():
     finally:
         db.close()
 
-
 # Pydantic model for history items
 class HistoryItem(BaseModel):
     text: str
 
+# WebSocket endpoint
+@app.websocket("/ws/{username}")
+async def websocket_endpoint(websocket: WebSocket, username: str):
+    await websocket.accept()
+    connected_clients[username] = websocket
+    try:
+        while True:
+            data = await websocket.receive_text()
+            # Broadcast the data to the same user (if needed)
+            if username in connected_clients:
+                await connected_clients[username].send_text(data)
+    except WebSocketDisconnect:
+        print(f"WebSocket disconnected for {username}")
+    finally:
+        if username in connected_clients:
+            del connected_clients[username]
+
+# Broadcast function to notify clients
+async def broadcast_to_user(username: str, message: dict):
+    if username in connected_clients:
+        await connected_clients[username].send_text(json.dumps(message))
 
 # Routes
 @app.get("/", response_class=HTMLResponse)
 async def home(request: Request):
     return templates.TemplateResponse("index.html", {"request": request})
 
-
 @app.get("/admin", response_class=HTMLResponse)
 async def admin_login_page(request: Request, error: str = None):
     print("Serving admin login page")
     return templates.TemplateResponse("admin_login.html", {"request": request, "error": error})
-
 
 @app.post("/admin/login")
 async def admin_login(request: Request):
@@ -166,7 +187,6 @@ async def admin_login(request: Request):
     finally:
         db.close()
 
-
 @app.get("/admin/dashboard", response_class=HTMLResponse)
 async def admin_dashboard(request: Request):
     if request.session.get("user", {}).get("role") != "admin":
@@ -179,7 +199,6 @@ async def admin_dashboard(request: Request):
         return templates.TemplateResponse("admin_dashboard.html", {"request": request, "users": get_all_users(db)})
     finally:
         db.close()
-
 
 @app.post("/admin/add_user")
 async def add_user(request: Request):
@@ -223,7 +242,6 @@ async def add_user(request: Request):
         })
     finally:
         db.close()
-
 
 @app.post("/admin/update_user")
 async def update_user(request: Request):
@@ -272,7 +290,6 @@ async def update_user(request: Request):
         })
     finally:
         db.close()
-
 
 @app.post("/admin/delete_user")
 async def delete_user(request: Request):
@@ -326,12 +343,10 @@ async def delete_user(request: Request):
     finally:
         db.close()
 
-
 @app.get("/user/login", response_class=HTMLResponse)
 async def user_login_page(request: Request, error: str = None):
     print("Serving user login page")
     return templates.TemplateResponse("user_login.html", {"request": request, "error": error})
-
 
 @app.post("/user/login")
 async def user_login(request: Request):
@@ -365,7 +380,6 @@ async def user_login(request: Request):
     finally:
         db.close()
 
-
 @app.get("/user/dashboard", response_class=HTMLResponse)
 async def user_dashboard(request: Request):
     if request.session.get("user", {}).get("role") != "user":
@@ -374,7 +388,6 @@ async def user_dashboard(request: Request):
     print("Serving user dashboard")
     return templates.TemplateResponse("user_dashboard.html",
                                       {"request": request, "username": request.session["user"]["username"]})
-
 
 # API endpoint to authenticate users (for the desktop app)
 @app.post("/api/authenticate")
@@ -413,7 +426,6 @@ async def authenticate_user(request: Request):
         print(f"Error parsing form data: {e}")
         return JSONResponse(content={"status": "error", "message": "Invalid request format"}, status_code=400)
 
-
 # API endpoint to fetch clipboard history for a user
 @app.get("/api/history/{username}")
 async def get_user_history(username: str):
@@ -436,7 +448,6 @@ async def get_user_history(username: str):
     finally:
         db.close()
 
-
 # API endpoint to submit new clipboard data
 @app.post("/api/submit/{username}")
 async def submit_clipboard_data(username: str, item: HistoryItem):
@@ -452,13 +463,14 @@ async def submit_clipboard_data(username: str, item: HistoryItem):
                 [item.id for item in sorted(items, key=lambda x: x.id)[:items_to_delete]]
             )))
             db.commit()
+        # Broadcast the update to the connected client
+        await broadcast_to_user(username, {"type": "history_update", "text": item.text})
         return JSONResponse(content={"status": "success", "message": "Clipboard data submitted"})
     except Exception as e:
         print(f"Error submitting clipboard data for {username}: {e}")
         return JSONResponse(content={"status": "error", "message": "Error submitting data"}, status_code=500)
     finally:
         db.close()
-
 
 # API endpoint to submit new copied text (used by the desktop app)
 @app.post("/api/submit_copied_text/{username}")
@@ -476,13 +488,14 @@ async def submit_copied_text(username: str, item: HistoryItem):
                     [item.id for item in sorted(items, key=lambda x: x.id)[:items_to_delete]]
                 )))
             db.commit()
+        # Broadcast the update to the connected client
+        await broadcast_to_user(username, {"type": "copied_text_update", "text": item.text})
         return JSONResponse(content={"status": "success", "message": "Copied text submitted"})
     except Exception as e:
         print(f"Error submitting copied text for {username}: {e}")
         return JSONResponse(content={"status": "error", "message": "Error submitting data"}, status_code=500)
     finally:
         db.close()
-
 
 # API endpoint to update history (used by the website)
 @app.post("/update-history/{username}")
@@ -500,13 +513,14 @@ async def update_history(username: str, item: HistoryItem):
                 [item.id for item in sorted(items, key=lambda x: x.id)[:items_to_delete]]
             )))
             db.commit()
+        # Broadcast the update to the connected client
+        await broadcast_to_user(username, {"type": "history_update", "text": item.text})
         return JSONResponse(content={"status": "success", "message": "History updated"})
     except Exception as e:
         print(f"Error updating history for {username}: {e}")
         return JSONResponse(content={"status": "error", "message": "Error updating history"}, status_code=500)
     finally:
         db.close()
-
 
 # API endpoint to fetch history (used by the website)
 @app.get("/fetch-history/{username}")
@@ -522,7 +536,6 @@ async def fetch_history(username: str):
     finally:
         db.close()
 
-
 # API endpoint to delete a history item (used by the website)
 @app.post("/delete-history/{username}")
 async def delete_history(username: str, item: HistoryItem):
@@ -530,13 +543,14 @@ async def delete_history(username: str, item: HistoryItem):
     try:
         db.execute(history.delete().where(history.c.username == username).where(history.c.text == item.text))
         db.commit()
+        # Broadcast the update to the connected client
+        await broadcast_to_user(username, {"type": "history_delete", "text": item.text})
         return JSONResponse(content={"status": "success", "message": "History item deleted"})
     except Exception as e:
         print(f"Error deleting history for {username}: {e}")
         return JSONResponse(content={"status": "error", "message": "Error deleting history"}, status_code=500)
     finally:
         db.close()
-
 
 # API endpoint to clear history (used by the website)
 @app.post("/clear-history/{username}")
@@ -545,13 +559,14 @@ async def clear_history(username: str):
     try:
         db.execute(history.delete().where(history.c.username == username))
         db.commit()
+        # Broadcast the update to the connected client
+        await broadcast_to_user(username, {"type": "history_clear"})
         return JSONResponse(content={"status": "success", "message": "History cleared"})
     except Exception as e:
         print(f"Error clearing history for {username}: {e}")
         return JSONResponse(content={"status": "error", "message": "Error clearing history"}, status_code=500)
     finally:
         db.close()
-
 
 # API endpoint to update copied text (used by the website)
 @app.post("/update-copied-text/{username}")
@@ -570,13 +585,14 @@ async def update_copied_text(username: str, item: HistoryItem):
                     [item.id for item in sorted(items, key=lambda x: x.id)[:items_to_delete]]
                 )))
             db.commit()
+        # Broadcast the update to the connected client
+        await broadcast_to_user(username, {"type": "copied_text_update", "text": item.text})
         return JSONResponse(content={"status": "success", "message": "Copied text updated"})
     except Exception as e:
         print(f"Error updating copied text for {username}: {e}")
         return JSONResponse(content={"status": "error", "message": "Error updating copied text"}, status_code=500)
     finally:
         db.close()
-
 
 # API endpoint to fetch copied text (used by the website)
 @app.get("/fetch-copied-text/{username}")
@@ -592,7 +608,6 @@ async def fetch_copied_text(username: str):
     finally:
         db.close()
 
-
 # API endpoint to delete a copied text item (used by the website)
 @app.post("/delete-copied-text/{username}")
 async def delete_copied_text(username: str, item: HistoryItem):
@@ -601,13 +616,14 @@ async def delete_copied_text(username: str, item: HistoryItem):
         db.execute(copied_text_history.delete().where(copied_text_history.c.username == username).where(
             copied_text_history.c.text == item.text))
         db.commit()
+        # Broadcast the update to the connected client
+        await broadcast_to_user(username, {"type": "copied_text_delete", "text": item.text})
         return JSONResponse(content={"status": "success", "message": "Copied text item deleted"})
     except Exception as e:
         print(f"Error deleting copied text for {username}: {e}")
         return JSONResponse(content={"status": "error", "message": "Error deleting copied text"}, status_code=500)
     finally:
         db.close()
-
 
 # API endpoint to clear copied text (used by the website)
 @app.post("/clear-copied-text/{username}")
@@ -616,13 +632,14 @@ async def clear_copied_text(username: str):
     try:
         db.execute(copied_text_history.delete().where(copied_text_history.c.username == username))
         db.commit()
+        # Broadcast the update to the connected client
+        await broadcast_to_user(username, {"type": "copied_text_clear"})
         return JSONResponse(content={"status": "success", "message": "Copied text history cleared"})
     except Exception as e:
         print(f"Error clearing copied text for {username}: {e}")
         return JSONResponse(content={"status": "error", "message": "Error clearing copied text"}, status_code=500)
     finally:
         db.close()
-
 
 # Helper function to get all users for admin dashboard
 def get_all_users(db):

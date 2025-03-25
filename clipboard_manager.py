@@ -1,8 +1,12 @@
 import requests
 import pyperclip
+import websocket
+import json
+import threading
 
 # Configuration
-API_BASE_URL = "https://clipboard-a6qozbmi4-abhishek-sharmas-projects-2069d670.vercel.app"
+API_BASE_URL = "https://clipboard-app-seven.vercel.app"
+WS_URL = "wss://clipboard-app-seven.vercel.app/ws"
 
 class ClipboardManager:
     def __init__(self):
@@ -10,6 +14,63 @@ class ClipboardManager:
         self.role = None
         self.history = []
         self.copied_text_history = []
+        self.ws = None
+        self.ws_thread = None
+
+    def on_message(self, ws, message):
+        """Handle incoming WebSocket messages."""
+        data = json.loads(message)
+        print(f"\n[WebSocket] Received update: {data}")
+        if data["type"] == "history_update":
+            self.history.insert(0, data["text"])
+            print(f"New history item added: {data['text']}")
+        elif data["type"] == "copied_text_update":
+            self.copied_text_history.insert(0, data["text"])
+            print(f"New copied text item added: {data['text']}")
+        elif data["type"] == "history_delete":
+            if data["text"] in self.history:
+                self.history.remove(data["text"])
+                print(f"History item deleted: {data['text']}")
+        elif data["type"] == "copied_text_delete":
+            if data["text"] in self.copied_text_history:
+                self.copied_text_history.remove(data["text"])
+                print(f"Copied text item deleted: {data['text']}")
+        elif data["type"] == "history_clear":
+            self.history = []
+            print("History cleared")
+        elif data["type"] == "copied_text_clear":
+            self.copied_text_history = []
+            print("Copied text history cleared")
+
+    def on_error(self, ws, error):
+        """Handle WebSocket errors."""
+        print(f"[WebSocket] Error: {error}")
+
+    def on_close(self, ws, close_status_code, close_msg):
+        """Handle WebSocket closure."""
+        print(f"[WebSocket] Connection closed: {close_status_code} - {close_msg}")
+
+    def on_open(self, ws):
+        """Handle WebSocket connection opening."""
+        print(f"[WebSocket] Connected to server for user: {self.username}")
+
+    def start_websocket(self):
+        """Start the WebSocket connection in a separate thread."""
+        if not self.username:
+            print("Error: Cannot start WebSocket without logging in.")
+            return
+
+        ws_url = f"{WS_URL}/{self.username}"
+        self.ws = websocket.WebSocketApp(
+            ws_url,
+            on_message=self.on_message,
+            on_error=self.on_error,
+            on_close=self.on_close,
+            on_open=self.on_open
+        )
+        self.ws_thread = threading.Thread(target=self.ws.run_forever)
+        self.ws_thread.daemon = True
+        self.ws_thread.start()
 
     def authenticate(self):
         print("\n=== Login ===")
@@ -37,6 +98,8 @@ class ClipboardManager:
                 self.username = data["username"]
                 self.role = data["role"]
                 print(f"\nWelcome, {self.username}! (Role: {self.role})")
+                # Start WebSocket connection after successful login
+                self.start_websocket()
                 return True
             else:
                 print(f"Error: {data['message']}")
@@ -118,7 +181,7 @@ class ClipboardManager:
             data = response.json()
             if data["status"] == "success":
                 print("Text submitted successfully!")
-                self.load_clipboard_data()  # Refresh the list
+                # No need to refresh the list manually; WebSocket will handle updates
             else:
                 print(f"Error: {data['message']}")
         except requests.RequestException as e:
@@ -157,6 +220,8 @@ class ClipboardManager:
                     print("Data refreshed successfully.")
             elif choice == "8":
                 print(f"Goodbye, {self.username}!")
+                if self.ws:
+                    self.ws.close()
                 self.username = None
                 self.role = None
                 self.history = []
@@ -164,6 +229,8 @@ class ClipboardManager:
                 return True  # Return to login screen
             elif choice == "9":
                 print("Exiting Clipboard Manager. Goodbye!")
+                if self.ws:
+                    self.ws.close()
                 return False  # Exit the app
             else:
                 print("Error: Invalid choice. Please try again.")

@@ -13,6 +13,51 @@ const copiedTextBtn = document.getElementById('copied-text-btn');
 
 let pollingInterval = null;
 const username = document.querySelector('header p').textContent.split(': ')[1];
+let ws = null;
+
+// WebSocket Connection
+function connectWebSocket() {
+    ws = new WebSocket(`wss://clipboard-app-seven.vercel.app/ws/${username}`);
+    ws.onopen = () => {
+        console.log('WebSocket connected');
+    };
+    ws.onmessage = (event) => {
+        const data = JSON.parse(event.data);
+        console.log('WebSocket message received:', data);
+        if (data.type === 'history_update') {
+            addToHistory(data.text);
+        } else if (data.type === 'copied_text_update') {
+            addToCopiedText(data.text);
+        } else if (data.type === 'history_delete') {
+            const items = historyList.getElementsByTagName('li');
+            for (let item of items) {
+                if (item.querySelector('span').textContent === data.text) {
+                    item.remove();
+                    break;
+                }
+            }
+        } else if (data.type === 'copied_text_delete') {
+            const items = copiedTextList.getElementsByTagName('li');
+            for (let item of items) {
+                if (item.querySelector('span').textContent === data.text) {
+                    item.remove();
+                    break;
+                }
+            }
+        } else if (data.type === 'history_clear') {
+            historyList.innerHTML = '';
+        } else if (data.type === 'copied_text_clear') {
+            copiedTextList.innerHTML = '';
+        }
+    };
+    ws.onclose = () => {
+        console.log('WebSocket disconnected');
+        setTimeout(connectWebSocket, 5000); // Reconnect after 5 seconds
+    };
+    ws.onerror = (error) => {
+        console.error('WebSocket error:', error);
+    };
+}
 
 // Toggle Sections
 function showClipboardManager() {
@@ -177,7 +222,6 @@ submitBtn.addEventListener('click', async () => {
     }
 
     if (mode === 'history' || mode === 'both') {
-        addToHistory(text);
         await fetch(`/update-history/${username}`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -192,4 +236,5 @@ submitBtn.addEventListener('click', async () => {
 document.addEventListener('DOMContentLoaded', () => {
     showClipboardManager();
     loadHistory();
+    connectWebSocket();
 });
