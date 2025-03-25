@@ -1,5 +1,5 @@
 import os
-from fastapi import FastAPI, Request, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, Request, HTTPException
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
 from fastapi.middleware.cors import CORSMiddleware
@@ -74,8 +74,9 @@ except Exception as e:
 # Set up database session
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
-# WebSocket clients
-connected_clients = {}
+# In-memory storage for clipboard updates (since WebSocket is removed)
+clipboard_updates = {}
+update_ids = {}
 
 # Create default admin and user on startup
 @app.on_event("startup")
@@ -112,32 +113,6 @@ async def startup_event():
 # Pydantic model for history items
 class HistoryItem(BaseModel):
     text: str
-
-# WebSocket endpoint
-@app.websocket("/ws/{username}")
-async def websocket_endpoint(websocket: WebSocket, username: str):
-    await websocket.accept()
-    connected_clients[username] = websocket
-    print(f"WebSocket connection established for {username}")
-    try:
-        while True:
-            data = await websocket.receive_text()
-            print(f"Received WebSocket message from {username}: {data}")
-            if username in connected_clients:
-                await connected_clients[username].send_text(data)
-    except WebSocketDisconnect:
-        print(f"WebSocket disconnected for {username}")
-    finally:
-        if username in connected_clients:
-            del connected_clients[username]
-
-# Broadcast function to notify clients
-async def broadcast_to_user(username: str, message: dict):
-    if username in connected_clients:
-        print(f"Broadcasting to {username}: {message}")
-        await connected_clients[username].send_text(json.dumps(message))
-    else:
-        print(f"No WebSocket connection for {username}")
 
 # Routes
 @app.get("/", response_class=HTMLResponse)
@@ -442,14 +417,29 @@ async def get_copied_text_history(username: str, request: Request = None):
     finally:
         db.close()
 
+# API endpoint to check for clipboard updates (polling for desktop app)
+@app.get("/api/check_clipboard_update/{username}")
+async def check_clipboard_update(username: str):
+    if username in clipboard_updates:
+        update = clipboard_updates[username]
+        return JSONResponse(content={
+            "status": "success",
+            "update_id": update["update_id"],
+            "text": update["text"]
+        })
+    return JSONResponse(content={"status": "no_update", "update_id": 0, "text": ""})
+
 # API endpoint to submit text to clipboard (from Clipboard Manager)
 @app.post("/api/submit_to_clipboard/{username}")
 async def submit_to_clipboard(username: str, item: HistoryItem, request: Request):
     if "user" not in request.session or request.session["user"]["username"] != username:
         raise HTTPException(status_code=403, detail="Not authorized")
     try:
-        # Broadcast the update to the connected client (to copy to system clipboard)
-        await broadcast_to_user(username, {"type": "clipboard_update", "text": item.text})
+        # Store the update in memory for polling
+        update_id = update_ids.get(username, 0) + 1
+        update_ids[username] = update_id
+        clipboard_updates[username] = {"update_id": update_id, "text": item.text}
+        print(f"Stored clipboard update for {username}: {item.text}")
         return JSONResponse(content={"status": "success", "message": "Text sent to clipboard"})
     except Exception as e:
         print(f"Error submitting text to clipboard for {username}: {e}")
@@ -471,8 +461,6 @@ async def submit_copied_text(username: str, item: HistoryItem):
                     [item.id for item in items[:items_to_delete]]
                 )))
             db.commit()
-        # Broadcast the update to the connected client (to show in Text Viewer)
-        await broadcast_to_user(username, {"type": "copied_text_update", "text": item.text})
         return JSONResponse(content={"status": "success", "message": "Copied text submitted"})
     except Exception as e:
         print(f"Error submitting copied text for {username}: {e}")
@@ -490,8 +478,6 @@ async def delete_copied_text(username: str, item: HistoryItem, request: Request)
         db.execute(copied_text_history.delete().where(copied_text_history.c.username == username).where(
             copied_text_history.c.text == item.text))
         db.commit()
-        # Broadcast the update to the connected client
-        await broadcast_to_user(username, {"type": "copied_text_delete", "text": item.text})
         return JSONResponse(content={"status": "success", "message": "Copied text item deleted"})
     except Exception as e:
         print(f"Error deleting copied text for {username}: {e}")
@@ -508,8 +494,6 @@ async def clear_copied_text(username: str, request: Request):
     try:
         db.execute(copied_text_history.delete().where(copied_text_history.c.username == username))
         db.commit()
-        # Broadcast the update to the connected client
-        await broadcast_to_user(username, {"type": "copied_text_clear"})
         return JSONResponse(content={"status": "success", "message": "Copied text history cleared"})
     except Exception as e:
         print(f"Error clearing copied text for {username}: {e}")
