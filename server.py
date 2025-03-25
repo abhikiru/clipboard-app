@@ -49,7 +49,13 @@ try:
 except Exception as e:
     print(f"Failed to connect to database: {e}")
     engine = None
-
+    try:
+        engine = create_engine(DATABASE_URL)
+        with engine.connect() as connection:
+            print("Database connection successful")
+    except Exception as e:
+        print(f"Failed to connect to database: {e}")
+        engine = None
 # Define tables
 users = Table(
     "users",
