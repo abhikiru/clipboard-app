@@ -33,7 +33,7 @@ function connectWebSocket() {
         } else if (data.type === 'history_delete') {
             const items = historyList.getElementsByTagName('li');
             for (let item of items) {
-                if (item.querySelector('span') && item.querySelector('span').textContent === data.text) {
+                if (item.querySelector('span').textContent === data.text) {
                     item.remove();
                     break;
                 }
@@ -41,7 +41,7 @@ function connectWebSocket() {
         } else if (data.type === 'copied_text_delete') {
             const items = copiedTextList.getElementsByTagName('li');
             for (let item of items) {
-                if (item.querySelector('span') && item.querySelector('span').textContent === data.text) {
+                if (item.querySelector('span').textContent === data.text) {
                     item.remove();
                     break;
                 }
@@ -111,7 +111,7 @@ async function loadHistory() {
     }
 }
 
-// Load copied text history (Text Viewer)
+// Load copied text history
 async function loadCopiedText() {
     try {
         const response = await fetch(`/api/history/${username}`, {
@@ -130,7 +130,6 @@ async function loadCopiedText() {
                 emptyItem.className = 'text-gray-500';
                 copiedTextList.appendChild(emptyItem);
             } else {
-                // Ensure latest text is at the top
                 copiedTextHistory.forEach(item => addToCopiedText(item));
             }
         } else {
@@ -200,7 +199,7 @@ function addToHistory(text) {
     historyList.insertBefore(listItem, historyList.firstChild);
 }
 
-// Add to Copied Text History (Text Viewer)
+// Add to Copied Text History
 function addToCopiedText(text) {
     // Check for duplicates to avoid adding the same text multiple times
     const existingItems = copiedTextList.getElementsByTagName('li');
@@ -255,7 +254,6 @@ function addToCopiedText(text) {
         emptyItem.remove();
     }
 
-    // Add the latest text at the top
     copiedTextList.insertBefore(listItem, copiedTextList.firstChild);
 }
 
@@ -280,7 +278,7 @@ clearHistoryBtn.addEventListener('click', async () => {
     }
 });
 
-// Clear Copied Text History (Text Viewer)
+// Clear Copied Text History
 clearCopiedTextBtn.addEventListener('click', async () => {
     copiedTextList.innerHTML = '';
     try {
@@ -309,7 +307,7 @@ submitBtn.addEventListener('click', async () => {
     errorMessage.textContent = ''; // Clear previous errors
 
     try {
-        // Add to history (Clipboard Manager)
+        // Add to history
         const historyResponse = await fetch(`/api/submit/${username}`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -324,7 +322,22 @@ submitBtn.addEventListener('click', async () => {
             throw new Error(historyData.message || 'Failed to add to history');
         }
 
-        alert('Text added to history and sent to clipboard manager!');
+        // Copy to clipboard (via copied_text_history)
+        const copiedTextResponse = await fetch(`/api/submit_copied_text/${username}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include', // Include session cookies
+            body: JSON.stringify({ text }),
+        });
+        if (!copiedTextResponse.ok) {
+            throw new Error(`HTTP error! Status: ${copiedTextResponse.status}`);
+        }
+        const copiedTextData = await copiedTextResponse.json();
+        if (copiedTextData.status !== 'success') {
+            throw new Error(copiedTextData.message || 'Failed to add to copied text history');
+        }
+
+        alert('Text added to history and copied to clipboard!');
         textInput.value = '';
     } catch (error) {
         console.error('Error submitting text:', error);
