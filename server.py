@@ -1,5 +1,5 @@
 import os
-from fastapi import FastAPI, Request, HTTPException
+from fastapi import FastAPI, Request, HTTPException, Depends, WebSocket
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
 from fastapi.middleware.cors import CORSMiddleware
@@ -8,19 +8,25 @@ from fastapi.staticfiles import StaticFiles
 from sqlalchemy import create_engine, Column, Integer, String, MetaData, Table
 from sqlalchemy.orm import sessionmaker
 from pydantic import BaseModel
+import jwt
+from fastapi.security import HTTPBearer
 
 # Initialize FastAPI app
 app = FastAPI()
 
-# Add CORS middleware to allow requests from the desktop app
+# Session secret key from environment variable
+SESSION_SECRET_KEY = os.getenv("SESSION_SECRET_KEY", "your-secret-key")
+JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY", "your-jwt-secret-key")
+
+# Add middlewares
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Allow all origins (for testing; restrict in production)
+    allow_origins=["*"],  # Change to specific origins in production
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
-app.add_middleware(SessionMiddleware, secret_key="your-secret-key")  # Replace with a secure key later
+app.add_middleware(SessionMiddleware, secret_key=SESSION_SECRET_KEY)
 
 # Serve static files
 app.mount("/static", StaticFiles(directory="static"), name="static")
@@ -81,6 +87,27 @@ except Exception as e:
 # Set up database session
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
+# JWT settings
+ALGORITHM = "HS256"
+
+def create_token(username: str):
+    return jwt.encode({"username": username}, JWT_SECRET_KEY, algorithm=ALGORITHM)
+
+def verify_token(token: str):
+    try:
+        payload = jwt.decode(token, JWT_SECRET_KEY, algorithms=[ALGORITHM])
+        return payload["username"]
+    except:
+        raise HTTPException(status_code=401, detail="Invalid token")
+
+security = HTTPBearer()
+
+# Active WebSocket connections
+active_connections = {}
+
+# Pydantic model for history items
+class HistoryItem(BaseModel):
+    text: str
 
 # Create default admin and user on startup
 @app.on_event("startup")
@@ -114,65 +141,38 @@ async def startup_event():
     finally:
         db.close()
 
-
-# Pydantic model for history items
-class HistoryItem(BaseModel):
-    text: str
-
-
 # Routes
 @app.get("/", response_class=HTMLResponse)
 async def home(request: Request):
     return templates.TemplateResponse("index.html", {"request": request})
-
 
 @app.get("/admin", response_class=HTMLResponse)
 async def admin_login_page(request: Request, error: str = None):
     print("Serving admin login page")
     return templates.TemplateResponse("admin_login.html", {"request": request, "error": error})
 
-
 @app.post("/admin/login")
 async def admin_login(request: Request):
     form = await request.form()
     username = form.get("username").strip()
     password = form.get("password").strip()
-
     print(f"Admin login attempt - Username: {username}, Password: {password}")
-
     db = SessionLocal()
     try:
         user = db.execute(users.select().where(users.c.username == username)).fetchone()
-        if user:
-            print(f"User found - Username: {user.username}, Password: {user.password}, Role: {user.role}")
-            print(f"Comparing password: Input '{password}' vs Stored '{user.password}'")
-            if user.password == password and user.role == "admin":
-                print("Login successful, setting session")
-                request.session["user"] = {"username": username, "role": "admin"}
-                return templates.TemplateResponse("admin_dashboard.html",
-                                                  {"request": request, "users": get_all_users(db)})
-            else:
-                print("Login failed: Password or role mismatch")
-                return templates.TemplateResponse("admin_login.html",
-                                                  {"request": request, "error": "Invalid ID or password"})
+        if user and user.password == password and user.role == "admin":
+            request.session["user"] = {"username": username, "role": "admin"}
+            return templates.TemplateResponse("admin_dashboard.html", {"request": request, "users": get_all_users(db)})
         else:
-            print(f"Login failed: User '{username}' not found in database")
-            return templates.TemplateResponse("admin_login.html",
-                                              {"request": request, "error": "Invalid ID or password"})
-    except Exception as e:
-        print(f"Error during admin login: {e}")
-        return templates.TemplateResponse("admin_login.html",
-                                          {"request": request, "error": "Server error during login"})
+            return templates.TemplateResponse("admin_login.html", {"request": request, "error": "Invalid ID or password"})
     finally:
         db.close()
-
 
 @app.get("/admin/dashboard", response_class=HTMLResponse)
 async def admin_dashboard(request: Request):
     if request.session.get("user", {}).get("role") != "admin":
         print("Admin dashboard access denied: Not authorized")
         raise HTTPException(status_code=403, detail="Not authorized")
-
     db = SessionLocal()
     try:
         print("Serving admin dashboard")
@@ -180,35 +180,26 @@ async def admin_dashboard(request: Request):
     finally:
         db.close()
 
-
 @app.post("/admin/add_user")
 async def add_user(request: Request):
     if request.session.get("user", {}).get("role") != "admin":
         print("Add user access denied: Not authorized")
         raise HTTPException(status_code=403, detail="Not authorized")
-
     form = await request.form()
     username = form.get("username").strip()
     password = form.get("password").strip()
     role = form.get("role").strip()
-
     print(f"Adding new user - Username: {username}, Password: {password}, Role: {role}")
-
     db = SessionLocal()
     try:
-        # Check if username already exists
         if db.execute(users.select().where(users.c.username == username)).fetchone():
-            print(f"Add user failed: Username '{username}' already exists")
             return templates.TemplateResponse("admin_dashboard.html", {
                 "request": request,
                 "users": get_all_users(db),
                 "message": f"Username '{username}' already exists"
             })
-
-        # Insert the new user
         db.execute(users.insert().values(username=username, password=password, role=role))
         db.commit()
-        print("User added successfully")
         return templates.TemplateResponse("admin_dashboard.html", {
             "request": request,
             "users": get_all_users(db),
@@ -224,40 +215,31 @@ async def add_user(request: Request):
     finally:
         db.close()
 
-
 @app.post("/admin/update_user")
 async def update_user(request: Request):
     if request.session.get("user", {}).get("role") != "admin":
         print("Update user access denied: Not authorized")
         raise HTTPException(status_code=403, detail="Not authorized")
-
     form = await request.form()
     user_id = form.get("user_id")
     new_username = form.get("username").strip()
     new_password = form.get("password").strip()
-
     print(f"Updating user - ID: {user_id}, New Username: {new_username}, New Password: {new_password}")
-
     db = SessionLocal()
     try:
-        # Check if the new username is already taken by another user
         existing_user = db.execute(
             users.select().where(users.c.username == new_username).where(users.c.id != user_id)).fetchone()
         if existing_user:
-            print(f"Update user failed: Username '{new_username}' already exists")
             return templates.TemplateResponse("admin_dashboard.html", {
                 "request": request,
                 "users": get_all_users(db),
                 "message": f"Username '{new_username}' already exists"
             })
-
-        # Update the user
         update_values = {"username": new_username}
-        if new_password:  # Only update password if a new one is provided
+        if new_password:
             update_values["password"] = new_password
         db.execute(users.update().where(users.c.id == user_id).values(**update_values))
         db.commit()
-        print("User updated successfully")
         return templates.TemplateResponse("admin_dashboard.html", {
             "request": request,
             "users": get_all_users(db),
@@ -273,44 +255,32 @@ async def update_user(request: Request):
     finally:
         db.close()
 
-
 @app.post("/admin/delete_user")
 async def delete_user(request: Request):
     if request.session.get("user", {}).get("role") != "admin":
         print("Delete user access denied: Not authorized")
         raise HTTPException(status_code=403, detail="Not authorized")
-
     form = await request.form()
     user_id = form.get("user_id")
     current_user = request.session.get("user", {}).get("username")
-
     print(f"Deleting user - ID: {user_id}")
-
     db = SessionLocal()
     try:
-        # Get the user to be deleted
         user_to_delete = db.execute(users.select().where(users.c.id == user_id)).fetchone()
         if not user_to_delete:
-            print(f"Delete user failed: User ID '{user_id}' not found")
             return templates.TemplateResponse("admin_dashboard.html", {
                 "request": request,
                 "users": get_all_users(db),
                 "message": "User not found"
             })
-
-        # Prevent the current admin from deleting themselves
         if user_to_delete.username == current_user:
-            print(f"Delete user failed: Cannot delete the current admin '{current_user}'")
             return templates.TemplateResponse("admin_dashboard.html", {
                 "request": request,
                 "users": get_all_users(db),
                 "message": "Cannot delete your own account"
             })
-
-        # Delete the user
         db.execute(users.delete().where(users.c.id == user_id))
         db.commit()
-        print(f"User '{user_to_delete.username}' deleted successfully")
         return templates.TemplateResponse("admin_dashboard.html", {
             "request": request,
             "users": get_all_users(db),
@@ -326,46 +296,6 @@ async def delete_user(request: Request):
     finally:
         db.close()
 
-
-@app.get("/user/login", response_class=HTMLResponse)
-async def user_login_page(request: Request, error: str = None):
-    print("Serving user login page")
-    return templates.TemplateResponse("user_login.html", {"request": request, "error": error})
-
-
-@app.post("/user/login")
-async def user_login(request: Request):
-    form = await request.form()
-    username = form.get("username").strip()
-    password = form.get("password").strip()
-
-    print(f"User login attempt - Username: {username}, Password: {password}")
-
-    db = SessionLocal()
-    try:
-        user = db.execute(users.select().where(users.c.username == username)).fetchone()
-        if user:
-            print(f"User found - Username: {user.username}, Password: {user.password}, Role: {user.role}")
-            print(f"Comparing password: Input '{password}' vs Stored '{user.password}'")
-            if user.password == password and user.role == "user":
-                print("Login successful, setting session")
-                request.session["user"] = {"username": username, "role": "user"}
-                return templates.TemplateResponse("user_dashboard.html", {"request": request, "username": username})
-            else:
-                print("Login failed: Password or role mismatch")
-                return templates.TemplateResponse("user_login.html",
-                                                  {"request": request, "error": "Invalid ID or password"})
-        else:
-            print(f"Login failed: User '{username}' not found in database")
-            return templates.TemplateResponse("user_login.html",
-                                              {"request": request, "error": "Invalid ID or password"})
-    except Exception as e:
-        print(f"Error during user login: {e}")
-        return templates.TemplateResponse("user_login.html", {"request": request, "error": "Server error during login"})
-    finally:
-        db.close()
-
-
 @app.get("/user/dashboard", response_class=HTMLResponse)
 async def user_dashboard(request: Request):
     if request.session.get("user", {}).get("role") != "user":
@@ -375,51 +305,14 @@ async def user_dashboard(request: Request):
     return templates.TemplateResponse("user_dashboard.html",
                                       {"request": request, "username": request.session["user"]["username"]})
 
-
-# API endpoint to authenticate users (for the desktop app)
-@app.post("/api/authenticate")
-async def authenticate_user(request: Request):
-    try:
-        form = await request.form()
-        print(f"Received form data: {dict(form)}")  # Log the form data
-        username = form.get("username")
-        password = form.get("password")
-
-        if not username or not password:
-            print("Missing username or password in form data")
-            return JSONResponse(content={"status": "error", "message": "Missing username or password"}, status_code=400)
-
-        username = username.strip()
-        password = password.strip()
-
-        print(f"API authenticate attempt - Username: {username}, Password: {password}")
-
-        db = SessionLocal()
-        try:
-            user = db.execute(users.select().where(users.c.username == username)).fetchone()
-            if user and user.password == password:
-                print(f"API authentication successful for user: {username}")
-                return JSONResponse(content={"status": "success", "username": username, "role": user.role})
-            else:
-                print(f"API authentication failed for user: {username}")
-                return JSONResponse(content={"status": "error", "message": "Invalid username or password"},
-                                    status_code=401)
-        except Exception as e:
-            print(f"Error during API authentication: {e}")
-            return JSONResponse(content={"status": "error", "message": "Server error"}, status_code=500)
-        finally:
-            db.close()
-    except Exception as e:
-        print(f"Error parsing form data: {e}")
-        return JSONResponse(content={"status": "error", "message": "Invalid request format"}, status_code=400)
-
-
 # API endpoint to fetch clipboard history for a user
 @app.get("/api/history/{username}")
-async def get_user_history(username: str):
+async def get_user_history(username: str, token: str = Depends(security)):
+    verified_username = verify_token(token.credentials)
+    if verified_username != username:
+        raise HTTPException(status_code=403, detail="Not authorized")
     db = SessionLocal()
     try:
-        # Fetch history
         history_items = db.execute(
             history.select().where(history.c.username == username).order_by(history.c.id.desc())).fetchall()
         copied_text_items = db.execute(
@@ -436,15 +329,16 @@ async def get_user_history(username: str):
     finally:
         db.close()
 
-
 # API endpoint to submit new clipboard data
 @app.post("/api/submit/{username}")
-async def submit_clipboard_data(username: str, item: HistoryItem):
+async def submit_clipboard_data(username: str, item: HistoryItem, token: str = Depends(security)):
+    verified_username = verify_token(token.credentials)
+    if verified_username != username:
+        raise HTTPException(status_code=403, detail="Not authorized")
     db = SessionLocal()
     try:
         db.execute(history.insert().values(username=username, text=item.text))
         db.commit()
-        # Enforce max 10 history items
         items = db.execute(history.select().where(history.c.username == username)).fetchall()
         if len(items) > 10:
             items_to_delete = len(items) - 10
@@ -459,40 +353,15 @@ async def submit_clipboard_data(username: str, item: HistoryItem):
     finally:
         db.close()
 
-
-# API endpoint to submit new copied text (used by the desktop app)
-@app.post("/api/submit_copied_text/{username}")
-async def submit_copied_text(username: str, item: HistoryItem):
-    db = SessionLocal()
-    try:
-        db.execute(copied_text_history.insert().values(username=username, text=item.text))
-        db.commit()
-        # Enforce max 10 copied text items
-        items = db.execute(copied_text_history.select().where(copied_text_history.c.username == username)).fetchall()
-        if len(items) > 10:
-            items_to_delete = len(items) - 10
-            db.execute(copied_text_history.delete().where(copied_text_history.c.username == username).where(
-                copied_text_history.c.id.in_(
-                    [item.id for item in sorted(items, key=lambda x: x.id)[:items_to_delete]]
-                )))
-            db.commit()
-        return JSONResponse(content={"status": "success", "message": "Copied text submitted"})
-    except Exception as e:
-        print(f"Error submitting copied text for {username}: {e}")
-        return JSONResponse(content={"status": "error", "message": "Error submitting data"}, status_code=500)
-    finally:
-        db.close()
-
-
-# API endpoint to update history (used by the website)
+# Update history (used by the website)
 @app.post("/update-history/{username}")
-async def update_history(username: str, item: HistoryItem):
+async def update_history(username: str, item: HistoryItem, current_user: dict = Depends(get_current_user)):
+    if current_user["username"] != username:
+        raise HTTPException(status_code=403, detail="Not authorized")
     db = SessionLocal()
     try:
         db.execute(history.insert().values(username=username, text=item.text))
         db.commit()
-
-        # Enforce max 10 history items
         items = db.execute(history.select().where(history.c.username == username)).fetchall()
         if len(items) > 10:
             items_to_delete = len(items) - 10
@@ -507,10 +376,11 @@ async def update_history(username: str, item: HistoryItem):
     finally:
         db.close()
 
-
-# API endpoint to fetch history (used by the website)
+# Fetch history (used by the website)
 @app.get("/fetch-history/{username}")
-async def fetch_history(username: str):
+async def fetch_history(username: str, current_user: dict = Depends(get_current_user)):
+    if current_user["username"] != username:
+        raise HTTPException(status_code=403, detail="Not authorized")
     db = SessionLocal()
     try:
         items = db.execute(
@@ -522,10 +392,11 @@ async def fetch_history(username: str):
     finally:
         db.close()
 
-
-# API endpoint to delete a history item (used by the website)
+# Delete history item
 @app.post("/delete-history/{username}")
-async def delete_history(username: str, item: HistoryItem):
+async def delete_history(username: str, item: HistoryItem, current_user: dict = Depends(get_current_user)):
+    if current_user["username"] != username:
+        raise HTTPException(status_code=403, detail="Not authorized")
     db = SessionLocal()
     try:
         db.execute(history.delete().where(history.c.username == username).where(history.c.text == item.text))
@@ -537,10 +408,11 @@ async def delete_history(username: str, item: HistoryItem):
     finally:
         db.close()
 
-
-# API endpoint to clear history (used by the website)
+# Clear history
 @app.post("/clear-history/{username}")
-async def clear_history(username: str):
+async def clear_history(username: str, current_user: dict = Depends(get_current_user)):
+    if current_user["username"] != username:
+        raise HTTPException(status_code=403, detail="Not authorized")
     db = SessionLocal()
     try:
         db.execute(history.delete().where(history.c.username == username))
@@ -552,50 +424,11 @@ async def clear_history(username: str):
     finally:
         db.close()
 
-
-# API endpoint to update copied text (used by the website)
-@app.post("/update-copied-text/{username}")
-async def update_copied_text(username: str, item: HistoryItem):
-    db = SessionLocal()
-    try:
-        db.execute(copied_text_history.insert().values(username=username, text=item.text))
-        db.commit()
-
-        # Enforce max 10 copied text items
-        items = db.execute(copied_text_history.select().where(copied_text_history.c.username == username)).fetchall()
-        if len(items) > 10:
-            items_to_delete = len(items) - 10
-            db.execute(copied_text_history.delete().where(copied_text_history.c.username == username).where(
-                copied_text_history.c.id.in_(
-                    [item.id for item in sorted(items, key=lambda x: x.id)[:items_to_delete]]
-                )))
-            db.commit()
-        return JSONResponse(content={"status": "success", "message": "Copied text updated"})
-    except Exception as e:
-        print(f"Error updating copied text for {username}: {e}")
-        return JSONResponse(content={"status": "error", "message": "Error updating copied text"}, status_code=500)
-    finally:
-        db.close()
-
-
-# API endpoint to fetch copied text (used by the website)
-@app.get("/fetch-copied-text/{username}")
-async def fetch_copied_text(username: str):
-    db = SessionLocal()
-    try:
-        items = db.execute(copied_text_history.select().where(copied_text_history.c.username == username).order_by(
-            copied_text_history.c.id.desc())).fetchall()
-        return JSONResponse(content={"status": "success", "history": [item.text for item in items]})
-    except Exception as e:
-        print(f"Error fetching copied text for {username}: {e}")
-        return JSONResponse(content={"status": "error", "message": "Error fetching copied text"}, status_code=500)
-    finally:
-        db.close()
-
-
-# API endpoint to delete a copied text item (used by the website)
+# Delete copied text item
 @app.post("/delete-copied-text/{username}")
-async def delete_copied_text(username: str, item: HistoryItem):
+async def delete_copied_text(username: str, item: HistoryItem, current_user: dict = Depends(get_current_user)):
+    if current_user["username"] != username:
+        raise HTTPException(status_code=403, detail="Not authorized")
     db = SessionLocal()
     try:
         db.execute(copied_text_history.delete().where(copied_text_history.c.username == username).where(
@@ -608,10 +441,11 @@ async def delete_copied_text(username: str, item: HistoryItem):
     finally:
         db.close()
 
-
-# API endpoint to clear copied text (used by the website)
+# Clear copied text
 @app.post("/clear-copied-text/{username}")
-async def clear_copied_text(username: str):
+async def clear_copied_text(username: str, current_user: dict = Depends(get_current_user)):
+    if current_user["username"] != username:
+        raise HTTPException(status_code=403, detail="Not authorized")
     db = SessionLocal()
     try:
         db.execute(copied_text_history.delete().where(copied_text_history.c.username == username))
@@ -622,7 +456,6 @@ async def clear_copied_text(username: str):
         return JSONResponse(content={"status": "error", "message": "Error clearing copied text"}, status_code=500)
     finally:
         db.close()
-
 
 # Helper function to get all users for admin dashboard
 def get_all_users(db):

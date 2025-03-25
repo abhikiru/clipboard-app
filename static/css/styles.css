@@ -368,6 +368,7 @@ th {
         transform: translateY(0);
     }
 }
+
 .add-user-form {
     margin-bottom: 20px;
     padding: 15px;
@@ -402,6 +403,7 @@ th {
 .add-user-form button:hover {
     background-color: #0056b3;
 }
+
 .delete-btn {
     padding: 8px 15px;
     background-color: #dc3545;
@@ -414,4 +416,21 @@ th {
 
 .delete-btn:hover {
     background-color: #c82333;
+}
+
+/* Responsive Design */
+@media (max-width: 600px) {
+    .login-section, .container {
+        max-width: 100%;
+        margin: 20px;
+        padding: 15px;
+    }
+    .footer-buttons {
+        flex-direction: column;
+        gap: 10px;
+    }
+    .history-list li {
+        height: auto;
+        min-height: 3cm;
+    }
 }
