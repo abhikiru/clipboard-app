@@ -94,7 +94,14 @@ async function loadHistory() {
         if (data.status === 'success') {
             historyList.innerHTML = '';
             const history = data.history || [];
-            history.forEach(item => addToHistory(item));
+            if (history.length === 0) {
+                const emptyItem = document.createElement('li');
+                emptyItem.textContent = 'No history yet...';
+                emptyItem.className = 'text-gray-500';
+                historyList.appendChild(emptyItem);
+            } else {
+                history.forEach(item => addToHistory(item));
+            }
         } else {
             throw new Error(data.message || 'Failed to load history');
         }
@@ -136,6 +143,14 @@ async function loadCopiedText() {
 
 // Add to Clipboard Manager History
 function addToHistory(text) {
+    // Check for duplicates to avoid adding the same text multiple times
+    const existingItems = historyList.getElementsByTagName('li');
+    for (let item of existingItems) {
+        if (item.querySelector('span') && item.querySelector('span').textContent === text) {
+            return; // Skip if text already exists
+        }
+    }
+
     const listItem = document.createElement('li');
     listItem.className = 'history-item';
 
@@ -175,6 +190,12 @@ function addToHistory(text) {
     });
     listItem.appendChild(deleteBtn);
 
+    // Remove "No history yet..." message if it exists
+    const emptyItem = historyList.querySelector('.text-gray-500');
+    if (emptyItem) {
+        emptyItem.remove();
+    }
+
     historyList.insertBefore(listItem, historyList.firstChild);
 }
 
@@ -183,7 +204,7 @@ function addToCopiedText(text) {
     // Check for duplicates to avoid adding the same text multiple times
     const existingItems = copiedTextList.getElementsByTagName('li');
     for (let item of existingItems) {
-        if (item.querySelector('span').textContent === text) {
+        if (item.querySelector('span') && item.querySelector('span').textContent === text) {
             return; // Skip if text already exists
         }
     }
@@ -246,6 +267,10 @@ clearHistoryBtn.addEventListener('click', async () => {
         });
         if (!response.ok) {
             throw new Error(`HTTP error! Status: ${response.status}`);
+        }
+        const data = await response.json();
+        if (data.status !== 'success') {
+            throw new Error(data.message || 'Failed to clear history');
         }
     } catch (error) {
         console.error('Error clearing history:', error);
