@@ -26,6 +26,10 @@ function connectWebSocket() {
     ws.onmessage = (event) => {
         const data = JSON.parse(event.data);
         console.log('WebSocket message received:', data);
+        if (data.type === 'ping') {
+            ws.send(JSON.stringify({ type: 'pong' }));
+            return;
+        }
         if (data.type === 'history_update') {
             addToHistory(data.text);
         } else if (data.type === 'copied_text_update') {

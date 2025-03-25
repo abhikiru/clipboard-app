@@ -25,6 +25,9 @@ class ClipboardManager:
         """Handle incoming WebSocket messages."""
         data = json.loads(message)
         print(f"\n[WebSocket] Received update: {data}")
+        if data["type"] == "ping":
+            ws.send(json.dumps({"type": "pong"}))
+            return
         if data["type"] == "history_update":
             self.history.insert(0, data["text"])
             print(f"New history item added: {data['text']}")

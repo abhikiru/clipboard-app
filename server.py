@@ -1,4 +1,5 @@
 import os
+import asyncio
 from fastapi import FastAPI, Request, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
@@ -114,9 +115,10 @@ async def startup_event():
 class HistoryItem(BaseModel):
     text: str
 
-# WebSocket endpoint
+# WebSocket endpoint with ping-pong mechanism
 @app.websocket("/ws/{username}")
 async def websocket_endpoint(websocket: WebSocket, username: str):
+    print(f"[DEBUG] WebSocket endpoint hit for {username}")
     await websocket.accept()
     if username not in websocket_connections:
         websocket_connections[username] = []
@@ -124,12 +126,14 @@ async def websocket_endpoint(websocket: WebSocket, username: str):
     print(f"WebSocket connected for {username}. Total connections: {len(websocket_connections[username])}")
     try:
         while True:
+            # Send a ping every 30 seconds to keep the connection alive
+            await websocket.send_json({"type": "ping"})
             data = await websocket.receive_text()
-            # Broadcast the data to all clients for this user
             if username in websocket_connections:
                 for ws in websocket_connections[username]:
                     if ws != websocket:  # Don't send back to the sender
                         await ws.send_text(data)
+            await asyncio.sleep(30)  # Ping every 30 seconds
     except WebSocketDisconnect:
         print(f"WebSocket disconnected for {username}")
         websocket_connections[username].remove(websocket)
@@ -267,7 +271,7 @@ async def update_user(request: Request):
             return templates.TemplateResponse("admin_dashboard.html", {
                 "request": request,
                 "users": get_all_users(db),
-                "message": f"Username '{new_username}' already  already exists"
+                "message": f"Username '{new_username}' already exists"
             })
 
         # Update the user
