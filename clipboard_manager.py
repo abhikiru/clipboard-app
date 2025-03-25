@@ -3,6 +3,7 @@ import pyperclip
 import websocket
 import json
 import threading
+import time
 
 # Configuration
 API_BASE_URL = "https://clipboard-app-seven.vercel.app"
@@ -16,6 +17,9 @@ class ClipboardManager:
         self.copied_text_history = []
         self.ws = None
         self.ws_thread = None
+        self.clipboard_monitor_thread = None
+        self.running = False
+        self.last_clipboard_content = None
 
     def on_message(self, ws, message):
         """Handle incoming WebSocket messages."""
@@ -27,6 +31,9 @@ class ClipboardManager:
         elif data["type"] == "copied_text_update":
             self.copied_text_history.insert(0, data["text"])
             print(f"New copied text item added: {data['text']}")
+            # Automatically copy the new item to the system clipboard
+            pyperclip.copy(data["text"])
+            print(f"Automatically copied to clipboard: {data['text']}")
         elif data["type"] == "history_delete":
             if data["text"] in self.history:
                 self.history.remove(data["text"])
@@ -71,6 +78,35 @@ class ClipboardManager:
         self.ws_thread = threading.Thread(target=self.ws.run_forever)
         self.ws_thread.daemon = True
         self.ws_thread.start()
+
+    def monitor_clipboard(self):
+        """Monitor the system clipboard for changes and send updates to the server."""
+        print("Starting clipboard monitoring...")
+        self.last_clipboard_content = pyperclip.paste()  # Initialize with current clipboard content
+        while self.running:
+            try:
+                current_content = pyperclip.paste()
+                if current_content != self.last_clipboard_content and current_content.strip():
+                    print(f"New clipboard content detected: {current_content}")
+                    self.last_clipboard_content = current_content
+                    # Submit the new clipboard content to the server
+                    self.submit_text_to_server(current_content, history_type="copied_text_history")
+            except Exception as e:
+                print(f"Error monitoring clipboard: {e}")
+            time.sleep(1)  # Check every second to avoid excessive CPU usage
+
+    def start_clipboard_monitoring(self):
+        """Start the clipboard monitoring thread."""
+        self.running = True
+        self.clipboard_monitor_thread = threading.Thread(target=self.monitor_clipboard)
+        self.clipboard_monitor_thread.daemon = True
+        self.clipboard_monitor_thread.start()
+
+    def stop_clipboard_monitoring(self):
+        """Stop the clipboard monitoring thread."""
+        self.running = False
+        if self.clipboard_monitor_thread:
+            self.clipboard_monitor_thread.join()
 
     def authenticate(self):
         print("\n=== Login ===")
@@ -122,6 +158,13 @@ class ClipboardManager:
             if data["status"] == "success":
                 self.history = data["history"]
                 self.copied_text_history = data["copied_text_history"]
+                # Automatically copy the most recent item from copied_text_history to the system clipboard
+                if self.copied_text_history:
+                    most_recent_item = self.copied_text_history[0]
+                    pyperclip.copy(most_recent_item)
+                    print(f"Automatically copied most recent item to clipboard: {most_recent_item}")
+                else:
+                    print("No items in copied text history to copy.")
                 return True
             else:
                 print(f"Error: {data['message']}")
@@ -130,43 +173,8 @@ class ClipboardManager:
             print(f"Error: Failed to connect to server: {e}")
             return False
 
-    def display_history(self, history_type="history"):
-        if history_type == "history":
-            items = self.history
-            print("\n=== Your History ===")
-        else:
-            items = self.copied_text_history
-            print("\n=== Your Copied Text History ===")
-
-        if not items:
-            print("No items found.")
-            return
-
-        for i, item in enumerate(items, 1):
-            print(f"{i}. {item}")
-
-    def copy_to_clipboard(self, history_type="history"):
-        self.display_history(history_type)
-        items = self.history if history_type == "history" else self.copied_text_history
-
-        if not items:
-            return
-
-        try:
-            choice = int(input("\nEnter the number of the item to copy (0 to cancel): "))
-            if choice == 0:
-                return
-            if 1 <= choice <= len(items):
-                text = items[choice - 1]
-                pyperclip.copy(text)
-                print(f"Copied to clipboard: {text}")
-            else:
-                print("Error: Invalid selection.")
-        except ValueError:
-            print("Error: Please enter a valid number.")
-
-    def submit_text(self, history_type="history"):
-        text = input("\nEnter text to submit: ").strip()
+    def submit_text_to_server(self, text, history_type="history"):
+        """Submit text to the server without user interaction."""
         if not text:
             print("Error: Text cannot be empty.")
             return
@@ -180,72 +188,35 @@ class ClipboardManager:
             response.raise_for_status()
             data = response.json()
             if data["status"] == "success":
-                print("Text submitted successfully!")
-                # No need to refresh the list manually; WebSocket will handle updates
+                print(f"Text submitted to {history_type} successfully: {text}")
             else:
                 print(f"Error: {data['message']}")
         except requests.RequestException as e:
             print(f"Error: Failed to connect to server: {e}")
-
-    def main_menu(self):
-        while True:
-            print("\n=== Clipboard Manager ===")
-            print(f"Logged in as: {self.username} ({self.role})")
-            print("1. View History")
-            print("2. View Copied Text History")
-            print("3. Copy from History")
-            print("4. Copy from Copied Text History")
-            print("5. Submit New Text to History")
-            print("6. Submit New Text to Copied Text History")
-            print("7. Refresh Data")
-            print("8. Logout")
-            print("9. Exit")
-
-            choice = input("Enter your choice (1-9): ").strip()
-
-            if choice == "1":
-                self.display_history("history")
-            elif choice == "2":
-                self.display_history("copied_text_history")
-            elif choice == "3":
-                self.copy_to_clipboard("history")
-            elif choice == "4":
-                self.copy_to_clipboard("copied_text_history")
-            elif choice == "5":
-                self.submit_text("history")
-            elif choice == "6":
-                self.submit_text("copied_text_history")
-            elif choice == "7":
-                if self.load_clipboard_data():
-                    print("Data refreshed successfully.")
-            elif choice == "8":
-                print(f"Goodbye, {self.username}!")
-                if self.ws:
-                    self.ws.close()
-                self.username = None
-                self.role = None
-                self.history = []
-                self.copied_text_history = []
-                return True  # Return to login screen
-            elif choice == "9":
-                print("Exiting Clipboard Manager. Goodbye!")
-                if self.ws:
-                    self.ws.close()
-                return False  # Exit the app
-            else:
-                print("Error: Invalid choice. Please try again.")
 
     def run(self):
         print("Welcome to Clipboard Manager!")
         while True:
             if not self.username:
                 if not self.authenticate():
+                    print("Login failed. Please try again.")
                     continue
                 if not self.load_clipboard_data():
                     print("Failed to load clipboard data. Please try again.")
                     self.username = None
                     continue
-            if not self.main_menu():
+                # Start clipboard monitoring after successful login
+                self.start_clipboard_monitoring()
+            # Keep the app running until the user presses Ctrl+C
+            try:
+                print("Clipboard Manager is running. Press Ctrl+C to exit.")
+                while True:
+                    time.sleep(1)  # Keep the main thread alive
+            except KeyboardInterrupt:
+                print("\nExiting Clipboard Manager. Goodbye!")
+                if self.ws:
+                    self.ws.close()
+                self.stop_clipboard_monitoring()
                 break
 
 if __name__ == "__main__":

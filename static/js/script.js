@@ -10,8 +10,10 @@ const copiedTextList = document.getElementById('copied-text-list');
 const clearCopiedTextBtn = document.getElementById('clear-copied-text');
 const clipboardManagerBtn = document.getElementById('clipboard-manager-btn');
 const copiedTextBtn = document.getElementById('copied-text-btn');
+const errorMessage = document.createElement('p'); // Add an error message element
+errorMessage.className = 'error';
+clipboardManagerSection.appendChild(errorMessage);
 
-let pollingInterval = null;
 const username = document.querySelector('header p').textContent.split(': ')[1];
 let ws = null;
 
@@ -56,6 +58,7 @@ function connectWebSocket() {
     };
     ws.onerror = (error) => {
         console.error('WebSocket error:', error);
+        errorMessage.textContent = 'WebSocket error occurred. Please try again.';
     };
 }
 
@@ -65,10 +68,6 @@ function showClipboardManager() {
     copiedTextSection.style.display = 'none';
     clipboardManagerBtn.classList.add('active');
     copiedTextBtn.classList.remove('active');
-    if (pollingInterval) {
-        clearInterval(pollingInterval);
-        pollingInterval = null;
-    }
 }
 
 function showCopiedText() {
@@ -76,10 +75,7 @@ function showCopiedText() {
     copiedTextSection.style.display = 'block';
     clipboardManagerBtn.classList.remove('active');
     copiedTextBtn.classList.add('active');
-    loadCopiedText();
-    if (!pollingInterval) {
-        pollingInterval = setInterval(loadCopiedText, 2000);
-    }
+    loadCopiedText(); // Load copied text once when the tab is opened
 }
 
 clipboardManagerBtn.addEventListener('click', showClipboardManager);
@@ -88,35 +84,49 @@ copiedTextBtn.addEventListener('click', showCopiedText);
 // Load history (Clipboard Manager)
 async function loadHistory() {
     try {
-        const response = await fetch(`/fetch-history/${username}`);
+        const response = await fetch(`/api/history/${username}`);
+        if (!response.ok) {
+            throw new Error(`HTTP error! Status: ${response.status}`);
+        }
         const data = await response.json();
         if (data.status === 'success') {
             historyList.innerHTML = '';
-            data.history.forEach(item => addToHistory(item));
+            const history = data.history || [];
+            history.forEach(item => addToHistory(item));
+        } else {
+            throw new Error(data.message || 'Failed to load history');
         }
     } catch (error) {
         console.error('Error loading history:', error);
+        errorMessage.textContent = `Error loading history: ${error.message}`;
     }
 }
 
 // Load copied text history
 async function loadCopiedText() {
     try {
-        const response = await fetch(`/fetch-copied-text/${username}`);
+        const response = await fetch(`/api/history/${username}`);
+        if (!response.ok) {
+            throw new Error(`HTTP error! Status: ${response.status}`);
+        }
         const data = await response.json();
         if (data.status === 'success') {
             copiedTextList.innerHTML = '';
-            if (data.history.length === 0) {
+            const copiedTextHistory = data.copied_text_history || [];
+            if (copiedTextHistory.length === 0) {
                 const emptyItem = document.createElement('li');
                 emptyItem.textContent = 'No copied text yet...';
                 emptyItem.className = 'text-gray-500';
                 copiedTextList.appendChild(emptyItem);
             } else {
-                data.history.forEach(item => addToCopiedText(item));
+                copiedTextHistory.forEach(item => addToCopiedText(item));
             }
+        } else {
+            throw new Error(data.message || 'Failed to load copied text');
         }
     } catch (error) {
         console.error('Error loading copied text history:', error);
+        errorMessage.textContent = `Error loading copied text: ${error.message}`;
     }
 }
 
@@ -144,11 +154,19 @@ function addToHistory(text) {
     deleteBtn.className = 'delete-btn';
     deleteBtn.addEventListener('click', async () => {
         listItem.remove();
-        await fetch(`/delete-history/${username}`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ text }),
-        });
+        try {
+            const response = await fetch(`/api/delete_history/${username}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ text }),
+            });
+            if (!response.ok) {
+                throw new Error(`HTTP error! Status: ${response.status}`);
+            }
+        } catch (error) {
+            console.error('Error deleting history item:', error);
+            errorMessage.textContent = `Error deleting history item: ${error.message}`;
+        }
     });
     listItem.appendChild(deleteBtn);
 
@@ -179,13 +197,27 @@ function addToCopiedText(text) {
     deleteBtn.className = 'delete-btn';
     deleteBtn.addEventListener('click', async () => {
         listItem.remove();
-        await fetch(`/delete-copied-text/${username}`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ text }),
-        });
+        try {
+            const response = await fetch(`/api/delete_copied_text/${username}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ text }),
+            });
+            if (!response.ok) {
+                throw new Error(`HTTP error! Status: ${response.status}`);
+            }
+        } catch (error) {
+            console.error('Error deleting copied text item:', error);
+            errorMessage.textContent = `Error deleting copied text item: ${error.message}`;
+        }
     });
     listItem.appendChild(deleteBtn);
+
+    // Remove "No copied text yet..." message if it exists
+    const emptyItem = copiedTextList.querySelector('.text-gray-500');
+    if (emptyItem) {
+        emptyItem.remove();
+    }
 
     copiedTextList.insertBefore(listItem, copiedTextList.firstChild);
 }
@@ -193,13 +225,29 @@ function addToCopiedText(text) {
 // Clear History (Clipboard Manager)
 clearHistoryBtn.addEventListener('click', async () => {
     historyList.innerHTML = '';
-    await fetch(`/clear-history/${username}`, { method: 'POST' });
+    try {
+        const response = await fetch(`/api/clear_history/${username}`, { method: 'POST' });
+        if (!response.ok) {
+            throw new Error(`HTTP error! Status: ${response.status}`);
+        }
+    } catch (error) {
+        console.error('Error clearing history:', error);
+        errorMessage.textContent = `Error clearing history: ${error.message}`;
+    }
 });
 
 // Clear Copied Text History
 clearCopiedTextBtn.addEventListener('click', async () => {
     copiedTextList.innerHTML = '';
-    await fetch(`/clear-copied-text/${username}`, { method: 'POST' });
+    try {
+        const response = await fetch(`/api/clear_copied_text/${username}`, { method: 'POST' });
+        if (!response.ok) {
+            throw new Error(`HTTP error! Status: ${response.status}`);
+        }
+    } catch (error) {
+        console.error('Error clearing copied text:', error);
+        errorMessage.textContent = `Error clearing copied text: ${error.message}`;
+    }
 });
 
 // Submit Button Logic (Clipboard Manager)
@@ -212,24 +260,45 @@ submitBtn.addEventListener('click', async () => {
         return;
     }
 
-    if (mode === 'copy' || mode === 'both') {
-        await fetch(`/update-copied-text/${username}`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ text }),
-        });
-        alert('Text added to copied text history!');
-    }
+    errorMessage.textContent = ''; // Clear previous errors
 
-    if (mode === 'history' || mode === 'both') {
-        await fetch(`/update-history/${username}`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ text }),
-        });
-    }
+    try {
+        if (mode === 'copy' || mode === 'both') {
+            const response = await fetch(`/api/submit_copied_text/${username}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ text }),
+            });
+            if (!response.ok) {
+                throw new Error(`HTTP error! Status: ${response.status}`);
+            }
+            const data = await response.json();
+            if (data.status !== 'success') {
+                throw new Error(data.message || 'Failed to add to copied text history');
+            }
+            alert('Text added to copied text history!');
+        }
 
-    textInput.value = '';
+        if (mode === 'history' || mode === 'both') {
+            const response = await fetch(`/api/submit/${username}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ text }),
+            });
+            if (!response.ok) {
+                throw new Error(`HTTP error! Status: ${response.status}`);
+            }
+            const data = await response.json();
+            if (data.status !== 'success') {
+                throw new Error(data.message || 'Failed to add to history');
+            }
+        }
+
+        textInput.value = '';
+    } catch (error) {
+        console.error('Error submitting text:', error);
+        errorMessage.textContent = `Error submitting text: ${error.message}`;
+    }
 });
 
 // Initial Load
