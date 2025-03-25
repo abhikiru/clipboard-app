@@ -41,14 +41,14 @@ if not DATABASE_URL:
 
 print(f"Connecting to database with URL: {DATABASE_URL}")
 
+engine = None
 try:
     engine = create_engine(DATABASE_URL)
-    print("Database connection successful")
+    with engine.connect() as connection:
+        print("Database connection successful")
 except Exception as e:
     print(f"Failed to connect to database: {e}")
-    raise
-
-metadata = MetaData()
+    engine = None
 
 # Define tables
 users = Table(
