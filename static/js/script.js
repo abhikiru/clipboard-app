@@ -201,7 +201,7 @@ submitBtn.addEventListener('click', async () => {
         }
 
         if (mode === 'add-to-history' || mode === 'both') {
-            // For "Add to History" and "Both", save to copied_text_history (to show in Text Viewer)
+            // Save to copied_text_history (to show in Text Viewer)
             const historyResponse = await fetch(`/api/submit_copied_text/${username}`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
