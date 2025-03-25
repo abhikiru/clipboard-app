@@ -85,6 +85,7 @@ async function loadCopiedText() {
                 emptyItem.className = 'text-gray-500';
                 copiedTextList.appendChild(emptyItem);
             } else {
+                // Ensure latest text is at the top
                 copiedTextHistory.forEach(item => addToCopiedText(item));
             }
         } else {
@@ -291,7 +292,7 @@ submitBtn.addEventListener('click', async () => {
             if (!historyResponse.ok) {
                 throw new Error(`HTTP error! Status: ${historyResponse.status}`);
             }
-            const historyData = await historyResponse.json();
+            const historyData = await response.json();
             if (historyData.status !== 'success') {
                 throw new Error(historyData.message || 'Failed to add to submitted text history');
             }
