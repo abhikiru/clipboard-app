@@ -52,7 +52,6 @@ else:
     except Exception as e:
         print(f"Failed to connect to database: {e}")
         engine = None
-
 # Define tables
 users = Table(
     "users",
