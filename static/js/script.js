@@ -175,6 +175,14 @@ function addToHistory(text) {
 
 // Add to Copied Text History
 function addToCopiedText(text) {
+    // Check for duplicates to avoid adding the same text multiple times
+    const existingItems = copiedTextList.getElementsByTagName('li');
+    for (let item of existingItems) {
+        if (item.querySelector('span').textContent === text) {
+            return; // Skip if text already exists
+        }
+    }
+
     const listItem = document.createElement('li');
     listItem.className = 'history-item';
 
@@ -253,7 +261,6 @@ clearCopiedTextBtn.addEventListener('click', async () => {
 // Submit Button Logic (Clipboard Manager)
 submitBtn.addEventListener('click', async () => {
     const text = textInput.value.trim();
-    const mode = actionMode.value;
 
     if (!text) {
         alert('Please enter some text!');
@@ -263,37 +270,35 @@ submitBtn.addEventListener('click', async () => {
     errorMessage.textContent = ''; // Clear previous errors
 
     try {
-        if (mode === 'copy' || mode === 'both') {
-            const response = await fetch(`/api/submit_copied_text/${username}`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ text }),
-            });
-            if (!response.ok) {
-                throw new Error(`HTTP error! Status: ${response.status}`);
-            }
-            const data = await response.json();
-            if (data.status !== 'success') {
-                throw new Error(data.message || 'Failed to add to copied text history');
-            }
-            alert('Text added to copied text history!');
+        // Always add to history
+        const historyResponse = await fetch(`/api/submit/${username}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ text }),
+        });
+        if (!historyResponse.ok) {
+            throw new Error(`HTTP error! Status: ${historyResponse.status}`);
+        }
+        const historyData = await historyResponse.json();
+        if (historyData.status !== 'success') {
+            throw new Error(historyData.message || 'Failed to add to history');
         }
 
-        if (mode === 'history' || mode === 'both') {
-            const response = await fetch(`/api/submit/${username}`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ text }),
-            });
-            if (!response.ok) {
-                throw new Error(`HTTP error! Status: ${response.status}`);
-            }
-            const data = await response.json();
-            if (data.status !== 'success') {
-                throw new Error(data.message || 'Failed to add to history');
-            }
+        // Always copy to clipboard (via copied_text_history)
+        const copiedTextResponse = await fetch(`/api/submit_copied_text/${username}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ text }),
+        });
+        if (!copiedTextResponse.ok) {
+            throw new Error(`HTTP error! Status: ${copiedTextResponse.status}`);
+        }
+        const copiedTextData = await copiedTextResponse.json();
+        if (copiedTextData.status !== 'success') {
+            throw new Error(copiedTextData.message || 'Failed to add to copied text history');
         }
 
+        alert('Text added to history and copied to clipboard!');
         textInput.value = '';
     } catch (error) {
         console.error('Error submitting text:', error);
