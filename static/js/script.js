@@ -33,7 +33,7 @@ function showCopiedText() {
     copiedTextBtn.classList.add('active');
     loadCopiedText();
     if (!pollingInterval) {
-        pollingInterval = setInterval(loadCopiedText, 5000); // Reduced polling to 5 seconds
+        pollingInterval = setInterval(loadCopiedText, 2000);
     }
 }
 
@@ -43,8 +43,7 @@ copiedTextBtn.addEventListener('click', showCopiedText);
 // Load history (Clipboard Manager)
 async function loadHistory() {
     try {
-        const response = await fetch(`/fetch-history/${username}`, { credentials: 'include' });
-        if (!response.ok) throw new Error("Failed to fetch history");
+        const response = await fetch(`/fetch-history/${username}`);
         const data = await response.json();
         if (data.status === 'success') {
             historyList.innerHTML = '';
@@ -58,8 +57,7 @@ async function loadHistory() {
 // Load copied text history
 async function loadCopiedText() {
     try {
-        const response = await fetch(`/fetch-copied-text/${username}`, { credentials: 'include' });
-        if (!response.ok) throw new Error("Failed to fetch copied text");
+        const response = await fetch(`/fetch-copied-text/${username}`);
         const data = await response.json();
         if (data.status === 'success') {
             copiedTextList.innerHTML = '';
@@ -105,7 +103,6 @@ function addToHistory(text) {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ text }),
-            credentials: 'include'
         });
     });
     listItem.appendChild(deleteBtn);
@@ -141,7 +138,6 @@ function addToCopiedText(text) {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ text }),
-            credentials: 'include'
         });
     });
     listItem.appendChild(deleteBtn);
@@ -152,13 +148,13 @@ function addToCopiedText(text) {
 // Clear History (Clipboard Manager)
 clearHistoryBtn.addEventListener('click', async () => {
     historyList.innerHTML = '';
-    await fetch(`/clear-history/${username}`, { method: 'POST', credentials: 'include' });
+    await fetch(`/clear-history/${username}`, { method: 'POST' });
 });
 
 // Clear Copied Text History
 clearCopiedTextBtn.addEventListener('click', async () => {
     copiedTextList.innerHTML = '';
-    await fetch(`/clear-copied-text/${username}`, { method: 'POST', credentials: 'include' });
+    await fetch(`/clear-copied-text/${username}`, { method: 'POST' });
 });
 
 // Submit Button Logic (Clipboard Manager)
@@ -176,9 +172,8 @@ submitBtn.addEventListener('click', async () => {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ text }),
-            credentials: 'include'
         });
-        alert('Text added to copied text history and sent to clipboard!');
+        alert('Text added to copied text history!');
     }
 
     if (mode === 'history' || mode === 'both') {
@@ -187,7 +182,6 @@ submitBtn.addEventListener('click', async () => {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ text }),
-            credentials: 'include'
         });
     }
 
