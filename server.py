@@ -42,13 +42,9 @@ if not DATABASE_URL:
 print(f"Connecting to database with URL: {DATABASE_URL}")
 
 engine = None
-try:
-    engine = create_engine(DATABASE_URL)
-    with engine.connect() as connection:
-        print("Database connection successful")
-except Exception as e:
-    print(f"Failed to connect to database: {e}")
-    engine = None
+if os.getenv("VERCEL"):
+    print("Running on Vercel, skipping database connection during build")
+else:
     try:
         engine = create_engine(DATABASE_URL)
         with engine.connect() as connection:
@@ -56,6 +52,7 @@ except Exception as e:
     except Exception as e:
         print(f"Failed to connect to database: {e}")
         engine = None
+
 # Define tables
 users = Table(
     "users",
