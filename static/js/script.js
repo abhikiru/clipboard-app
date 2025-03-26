@@ -40,7 +40,7 @@ function showCopiedText() {
     loadCopiedText(); // Load copied text when tab is opened
     // Start polling to refresh the copied text history every 3 seconds
     if (!pollingInterval) {
-        pollingInterval = setInterval(loadCopiedText, 3000); // Increased to 3 seconds to reduce load
+        pollingInterval = setInterval(loadCopiedText, 3000); // Polling every 3 seconds
     }
 }
 
@@ -92,14 +92,14 @@ async function loadCopiedText() {
             const currentHash = copiedTextHistory.join('|'); // Create a hash of the current history
             if (currentHash !== lastCopiedTextHash) { // Only update UI if data has changed
                 lastCopiedTextHash = currentHash;
-                copiedTextList.innerHTML = ''; // Clear existing items
+                copiedTextList.innerHTML = ''; // Clear existing items to avoid duplication
                 if (copiedTextHistory.length === 0) {
                     const emptyItem = document.createElement('li');
                     emptyItem.textContent = 'No copied text yet...';
                     emptyItem.className = 'text-gray-500';
                     copiedTextList.appendChild(emptyItem);
                 } else {
-                    // Ensure latest text is at the top
+                    // Add items in order (latest first)
                     copiedTextHistory.forEach(item => addToCopiedText(item));
                 }
             }
@@ -170,10 +170,13 @@ function addToSubmittedTextHistory(text) {
 
 // Add to Copied Text History (Text Viewer)
 function addToCopiedText(text) {
+    // Check for duplicates
     const existingItems = copiedTextList.getElementsByTagName('li');
     for (let item of existingItems) {
         if (item.querySelector('span') && item.querySelector('span').textContent === text) {
-            return;
+            // If the item already exists, move it to the top instead of adding a duplicate
+            copiedTextList.removeChild(item);
+            break;
         }
     }
 
@@ -249,6 +252,7 @@ clearHistoryBtn.addEventListener('click', async () => {
 // Clear Copied Text History (Text Viewer)
 clearCopiedTextBtn.addEventListener('click', async () => {
     copiedTextList.innerHTML = '';
+    lastCopiedTextHash = ''; // Reset hash to force UI update on next poll
     try {
         const response = await fetch(`/api/clear_copied_text/${username}`, {
             method: 'POST',
