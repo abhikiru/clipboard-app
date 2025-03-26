@@ -1,5 +1,5 @@
 import os
-from fastapi import FastAPI, Request, HTTPException
+from fastapi import FastAPI, Request, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
 from fastapi.middleware.cors import CORSMiddleware
@@ -63,6 +63,14 @@ copied_text_history = Table(
     Column("text", String, nullable=False),
 )
 
+submitted_text_history = Table(
+    "submitted_text_history",
+    metadata,
+    Column("id", Integer, primary_key=True),
+    Column("username", String(50), nullable=False),
+    Column("text", String, nullable=False),
+)
+
 # Create tables
 try:
     metadata.create_all(engine)
@@ -74,9 +82,8 @@ except Exception as e:
 # Set up database session
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
-# In-memory storage for clipboard updates (since WebSocket is removed)
-clipboard_updates = {}
-update_ids = {}
+# WebSocket connections
+connected_clients = {}  # Dictionary to store WebSocket connections for each username
 
 # Create default admin and user on startup
 @app.on_event("startup")
@@ -113,6 +120,23 @@ async def startup_event():
 # Pydantic model for history items
 class HistoryItem(BaseModel):
     text: str
+
+# WebSocket endpoint for clipboard updates
+@app.websocket("/ws/{username}")
+async def websocket_endpoint(websocket: WebSocket, username: str):
+    await websocket.accept()
+    connected_clients[username] = websocket
+    print(f"WebSocket connection established for user: {username}")
+    try:
+        while True:
+            data = await websocket.receive_text()
+            print(f"Received message from {username}: {data}")
+    except WebSocketDisconnect:
+        print(f"WebSocket disconnected for user: {username}")
+        del connected_clients[username]
+    except Exception as e:
+        print(f"WebSocket error for user {username}: {e}")
+        del connected_clients[username]
 
 # Routes
 @app.get("/", response_class=HTMLResponse)
@@ -400,8 +424,6 @@ async def authenticate_user(request: Request):
 # API endpoint to fetch copied text history for a user (Text Viewer)
 @app.get("/api/copied_text_history/{username}")
 async def get_copied_text_history(username: str, request: Request = None):
-    # Temporarily bypass session check for desktop app
-    # In a production environment, add proper authentication (e.g., token-based)
     db = SessionLocal()
     try:
         copied_text_items = db.execute(
@@ -417,29 +439,19 @@ async def get_copied_text_history(username: str, request: Request = None):
     finally:
         db.close()
 
-# API endpoint to check for clipboard updates (polling for desktop app)
-@app.get("/api/check_clipboard_update/{username}")
-async def check_clipboard_update(username: str):
-    if username in clipboard_updates:
-        update = clipboard_updates[username]
-        return JSONResponse(content={
-            "status": "success",
-            "update_id": update["update_id"],
-            "text": update["text"]
-        })
-    return JSONResponse(content={"status": "no_update", "update_id": 0, "text": ""})
-
 # API endpoint to submit text to clipboard (from Clipboard Manager)
 @app.post("/api/submit_to_clipboard/{username}")
 async def submit_to_clipboard(username: str, item: HistoryItem, request: Request):
     if "user" not in request.session or request.session["user"]["username"] != username:
         raise HTTPException(status_code=403, detail="Not authorized")
     try:
-        # Store the update in memory for polling
-        update_id = update_ids.get(username, 0) + 1
-        update_ids[username] = update_id
-        clipboard_updates[username] = {"update_id": update_id, "text": item.text}
-        print(f"Stored clipboard update for {username}: {item.text}")
+        # Send the text to the connected WebSocket client (clipboard_manager.py)
+        if username in connected_clients:
+            websocket = connected_clients[username]
+            await websocket.send_text(json.dumps({"action": "clipboard_update", "text": item.text}))
+            print(f"Sent clipboard update to {username}: {item.text}")
+        else:
+            print(f"No WebSocket client connected for user: {username}")
         return JSONResponse(content={"status": "success", "message": "Text sent to clipboard"})
     except Exception as e:
         print(f"Error submitting text to clipboard for {username}: {e}")
@@ -498,6 +510,84 @@ async def clear_copied_text(username: str, request: Request):
     except Exception as e:
         print(f"Error clearing copied text for {username}: {e}")
         return JSONResponse(content={"status": "error", "message": "Error clearing copied text"}, status_code=500)
+    finally:
+        db.close()
+
+# API endpoint to fetch submitted text history (Clipboard Manager)
+@app.get("/api/submitted_text_history/{username}")
+async def get_submitted_text_history(username: str, request: Request):
+    if "user" not in request.session or request.session["user"]["username"] != username:
+        raise HTTPException(status_code=403, detail="Not authorized")
+    db = SessionLocal()
+    try:
+        submitted_text_items = db.execute(
+            submitted_text_history.select().where(submitted_text_history.c.username == username).order_by(
+                submitted_text_history.c.id.desc())).fetchall()
+        return JSONResponse(content={
+            "status": "success",
+            "submitted_text_history": [item.text for item in submitted_text_items]
+        })
+    except Exception as e:
+        print(f"Error fetching submitted text history for {username}: {e}")
+        return JSONResponse(content={"status": "error", "message": "Error fetching submitted text history"}, status_code=500)
+    finally:
+        db.close()
+
+# API endpoint to submit new submitted text (Clipboard Manager history)
+@app.post("/api/submit_submitted_text/{username}")
+async def submit_submitted_text(username: str, item: HistoryItem, request: Request):
+    if "user" not in request.session or request.session["user"]["username"] != username:
+        raise HTTPException(status_code=403, detail="Not authorized")
+    db = SessionLocal()
+    try:
+        db.execute(submitted_text_history.insert().values(username=username, text=item.text))
+        db.commit()
+        # Enforce max 10 submitted text items
+        items = db.execute(submitted_text_history.select().where(submitted_text_history.c.username == username).order_by(submitted_text_history.c.id)).fetchall()
+        if len(items) > 10:
+            items_to_delete = len(items) - 10
+            db.execute(submitted_text_history.delete().where(submitted_text_history.c.username == username).where(
+                submitted_text_history.c.id.in_(
+                    [item.id for item in items[:items_to_delete]]
+                )))
+            db.commit()
+        return JSONResponse(content={"status": "success", "message": "Submitted text added to history"})
+    except Exception as e:
+        print(f"Error submitting submitted text for {username}: {e}")
+        return JSONResponse(content={"status": "error", "message": "Error submitting submitted text"}, status_code=500)
+    finally:
+        db.close()
+
+# API endpoint to delete a submitted text item
+@app.post("/api/delete_submitted_text/{username}")
+async def delete_submitted_text(username: str, item: HistoryItem, request: Request):
+    if "user" not in request.session or request.session["user"]["username"] != username:
+        raise HTTPException(status_code=403, detail="Not authorized")
+    db = SessionLocal()
+    try:
+        db.execute(submitted_text_history.delete().where(submitted_text_history.c.username == username).where(
+            submitted_text_history.c.text == item.text))
+        db.commit()
+        return JSONResponse(content={"status": "success", "message": "Submitted text item deleted"})
+    except Exception as e:
+        print(f"Error deleting submitted text for {username}: {e}")
+        return JSONResponse(content={"status": "error", "message": "Error deleting submitted text"}, status_code=500)
+    finally:
+        db.close()
+
+# API endpoint to clear submitted text
+@app.post("/api/clear_submitted_text/{username}")
+async def clear_submitted_text(username: str, request: Request):
+    if "user" not in request.session or request.session["user"]["username"] != username:
+        raise HTTPException(status_code=403, detail="Not authorized")
+    db = SessionLocal()
+    try:
+        db.execute(submitted_text_history.delete().where(submitted_text_history.c.username == username))
+        db.commit()
+        return JSONResponse(content={"status": "success", "message": "Submitted text history cleared"})
+    except Exception as e:
+        print(f"Error clearing submitted text for {username}: {e}")
+        return JSONResponse(content={"status": "error", "message": "Error clearing submitted text"}, status_code=500)
     finally:
         db.close()
 

@@ -274,8 +274,8 @@ submitBtn.addEventListener('click', async () => {
     errorMessage.textContent = '';
 
     try {
+        // Send text to clipboard_manager.py to copy to system clipboard
         if (mode === 'copy-to-clipboard' || mode === 'both') {
-            // Send text to clipboard_manager.py to copy to system clipboard
             const clipboardResponse = await fetch(`/api/submit_to_clipboard/${username}`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -292,8 +292,8 @@ submitBtn.addEventListener('click', async () => {
             alert('Text sent to system clipboard!');
         }
 
+        // Save to submitted_text_history (to show in Clipboard Manager history)
         if (mode === 'add-to-history' || mode === 'both') {
-            // Save to submitted_text_history (to show in Clipboard Manager history)
             const historyResponse = await fetch(`/api/submit_submitted_text/${username}`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
