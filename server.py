@@ -1,5 +1,5 @@
 import os
-from fastapi import FastAPI, Request, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, Request, HTTPException
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
 from fastapi.middleware.cors import CORSMiddleware
@@ -71,6 +71,14 @@ submitted_text_history = Table(
     Column("text", String, nullable=False),
 )
 
+clipboard_updates = Table(
+    "clipboard_updates",
+    metadata,
+    Column("id", Integer, primary_key=True),
+    Column("username", String(50), nullable=False),
+    Column("text", String, nullable=False),
+)
+
 # Create tables
 try:
     metadata.create_all(engine)
@@ -81,9 +89,6 @@ except Exception as e:
 
 # Set up database session
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
-
-# WebSocket connections
-connected_clients = {}  # Dictionary to store WebSocket connections for each username
 
 # Create default admin and user on startup
 @app.on_event("startup")
@@ -120,23 +125,6 @@ async def startup_event():
 # Pydantic model for history items
 class HistoryItem(BaseModel):
     text: str
-
-# WebSocket endpoint for clipboard updates
-@app.websocket("/ws/{username}")
-async def websocket_endpoint(websocket: WebSocket, username: str):
-    await websocket.accept()
-    connected_clients[username] = websocket
-    print(f"WebSocket connection established for user: {username}")
-    try:
-        while True:
-            data = await websocket.receive_text()
-            print(f"Received message from {username}: {data}")
-    except WebSocketDisconnect:
-        print(f"WebSocket disconnected for user: {username}")
-        del connected_clients[username]
-    except Exception as e:
-        print(f"WebSocket error for user {username}: {e}")
-        del connected_clients[username]
 
 # Routes
 @app.get("/", response_class=HTMLResponse)
@@ -444,18 +432,43 @@ async def get_copied_text_history(username: str, request: Request = None):
 async def submit_to_clipboard(username: str, item: HistoryItem, request: Request):
     if "user" not in request.session or request.session["user"]["username"] != username:
         raise HTTPException(status_code=403, detail="Not authorized")
+    db = SessionLocal()
     try:
-        # Send the text to the connected WebSocket client (clipboard_manager.py)
-        if username in connected_clients:
-            websocket = connected_clients[username]
-            await websocket.send_text(json.dumps({"action": "clipboard_update", "text": item.text}))
-            print(f"Sent clipboard update to {username}: {item.text}")
-        else:
-            print(f"No WebSocket client connected for user: {username}")
+        # Store the text in clipboard_updates table
+        db.execute(clipboard_updates.insert().values(username=username, text=item.text))
+        db.commit()
+        # Enforce only the latest text (delete older entries)
+        items = db.execute(clipboard_updates.select().where(clipboard_updates.c.username == username).order_by(clipboard_updates.c.id)).fetchall()
+        if len(items) > 1:
+            items_to_delete = len(items) - 1
+            db.execute(clipboard_updates.delete().where(clipboard_updates.c.username == username).where(
+                clipboard_updates.c.id.in_(
+                    [item.id for item in items[:items_to_delete]]
+                )))
+            db.commit()
         return JSONResponse(content={"status": "success", "message": "Text sent to clipboard"})
     except Exception as e:
         print(f"Error submitting text to clipboard for {username}: {e}")
         return JSONResponse(content={"status": "error", "message": "Error submitting text to clipboard"}, status_code=500)
+    finally:
+        db.close()
+
+# API endpoint to get the latest clipboard text (for polling)
+@app.get("/api/get_latest_clipboard/{username}")
+async def get_latest_clipboard(username: str):
+    db = SessionLocal()
+    try:
+        latest_item = db.execute(
+            clipboard_updates.select().where(clipboard_updates.c.username == username).order_by(
+                clipboard_updates.c.id.desc())).first()
+        if latest_item:
+            return JSONResponse(content={"status": "success", "text": latest_item.text})
+        return JSONResponse(content={"status": "success", "text": ""})
+    except Exception as e:
+        print(f"Error fetching latest clipboard text for {username}: {e}")
+        return JSONResponse(content={"status": "error", "message": "Error fetching latest clipboard text"}, status_code=500)
+    finally:
+        db.close()
 
 # API endpoint to submit new copied text (used by the desktop app)
 @app.post("/api/submit_copied_text/{username}")

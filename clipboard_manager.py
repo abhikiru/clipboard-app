@@ -3,12 +3,9 @@ import pyperclip
 import json
 import threading
 import time
-import websocket
-import rel
 
 # Configuration
-API_BASE_URL = "http://localhost:8000"  # Change this to your deployed server URL (e.g., Heroku/Render URL)
-WS_URL = "ws://localhost:8000/ws"  # Change this to your deployed WebSocket URL
+API_BASE_URL = "https://clipboard-app-seven.vercel.app"  # Your Vercel URL
 
 class ClipboardManager:
     def __init__(self):
@@ -16,57 +13,10 @@ class ClipboardManager:
         self.role = None
         self.copied_text_history = []
         self.clipboard_monitor_thread = None
+        self.polling_thread = None
         self.running = False
         self.last_clipboard_content = None
-        self.ws = None
-
-    def on_message(self, ws, message):
-        """Handle incoming WebSocket messages."""
-        try:
-            data = json.loads(message)
-            if data.get("action") == "clipboard_update":
-                text = data.get("text")
-                pyperclip.copy(text)
-                print(f"Copied to system clipboard: {text}")
-        except Exception as e:
-            print(f"Error processing WebSocket message: {e}")
-
-    def on_error(self, ws, error):
-        """Handle WebSocket errors."""
-        print(f"[WebSocket] Error: {error}")
-        self.reconnect()
-
-    def on_close(self, ws, close_status_code, close_msg):
-        """Handle WebSocket closure."""
-        print(f"[WebSocket] Connection closed: {close_status_code} - {close_msg}")
-        self.reconnect()
-
-    def on_open(self, ws):
-        """Handle WebSocket connection opening."""
-        print(f"[WebSocket] Connection established for user: {self.username}")
-
-    def reconnect(self):
-        """Reconnect to WebSocket after a delay."""
-        if not self.running:
-            return
-        print("Attempting to reconnect in 5 seconds...")
-        time.sleep(5)
-        self.start_websocket()
-
-    def start_websocket(self):
-        """Start WebSocket connection."""
-        if not self.username:
-            print("Error: Username not set. Cannot start WebSocket.")
-            return
-        ws_url = f"{WS_URL}/{self.username}"
-        self.ws = websocket.WebSocketApp(
-            ws_url,
-            on_open=self.on_open,
-            on_message=self.on_message,
-            on_error=self.on_error,
-            on_close=self.on_close
-        )
-        threading.Thread(target=self.ws.run_forever, kwargs={"ping_interval": 30, "ping_timeout": 10}, daemon=True).start()
+        self.last_submitted_text = None
 
     def monitor_clipboard(self):
         """Monitor the system clipboard for changes and send updates to the server."""
@@ -83,6 +33,24 @@ class ClipboardManager:
                 print(f"Error monitoring clipboard: {e}")
             time.sleep(1)
 
+    def poll_for_clipboard_updates(self):
+        """Poll the server for new clipboard updates."""
+        print("Starting polling for clipboard updates...")
+        while self.running:
+            try:
+                response = requests.get(f"{API_BASE_URL}/api/get_latest_clipboard/{self.username}")
+                response.raise_for_status()
+                data = response.json()
+                if data["status"] == "success" and data["text"]:
+                    new_text = data["text"]
+                    if new_text != self.last_submitted_text:
+                        pyperclip.copy(new_text)
+                        self.last_submitted_text = new_text
+                        print(f"Copied to system clipboard: {new_text}")
+            except requests.RequestException as e:
+                print(f"Error polling for clipboard updates: {e}")
+            time.sleep(2)  # Poll every 2 seconds
+
     def start_clipboard_monitoring(self):
         """Start the clipboard monitoring thread."""
         self.running = True
@@ -90,13 +58,19 @@ class ClipboardManager:
         self.clipboard_monitor_thread.daemon = True
         self.clipboard_monitor_thread.start()
 
+    def start_polling(self):
+        """Start the polling thread for clipboard updates."""
+        self.polling_thread = threading.Thread(target=self.poll_for_clipboard_updates)
+        self.polling_thread.daemon = True
+        self.polling_thread.start()
+
     def stop_clipboard_monitoring(self):
-        """Stop the clipboard monitoring thread."""
+        """Stop the clipboard monitoring and polling threads."""
         self.running = False
         if self.clipboard_monitor_thread:
             self.clipboard_monitor_thread.join()
-        if self.ws:
-            self.ws.close()
+        if self.polling_thread:
+            self.polling_thread.join()
 
     def authenticate(self):
         print("\n=== Login ===")
@@ -189,7 +163,7 @@ class ClipboardManager:
                     self.username = None
                     continue
                 self.start_clipboard_monitoring()
-                self.start_websocket()
+                self.start_polling()
             try:
                 print("Clipboard Manager is running. Press Ctrl+C to exit.")
                 while True:

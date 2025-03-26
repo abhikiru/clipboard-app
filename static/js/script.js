@@ -16,6 +16,7 @@ clipboardManagerSection.appendChild(errorMessage);
 
 const username = document.querySelector('header p').textContent.split(': ')[1];
 let pollingInterval = null; // For polling the copied text history
+let lastCopiedTextHash = ''; // To avoid unnecessary UI updates in Text Viewer
 
 // Toggle Sections
 function showClipboardManager() {
@@ -37,9 +38,9 @@ function showCopiedText() {
     clipboardManagerBtn.classList.remove('active');
     copiedTextBtn.classList.add('active');
     loadCopiedText(); // Load copied text when tab is opened
-    // Start polling to refresh the copied text history every 2 seconds
+    // Start polling to refresh the copied text history every 3 seconds
     if (!pollingInterval) {
-        pollingInterval = setInterval(loadCopiedText, 2000);
+        pollingInterval = setInterval(loadCopiedText, 3000); // Increased to 3 seconds to reduce load
     }
 }
 
@@ -87,16 +88,20 @@ async function loadCopiedText() {
         }
         const data = await response.json();
         if (data.status === 'success') {
-            copiedTextList.innerHTML = ''; // Clear existing items
             const copiedTextHistory = data.copied_text_history || [];
-            if (copiedTextHistory.length === 0) {
-                const emptyItem = document.createElement('li');
-                emptyItem.textContent = 'No copied text yet...';
-                emptyItem.className = 'text-gray-500';
-                copiedTextList.appendChild(emptyItem);
-            } else {
-                // Ensure latest text is at the top
-                copiedTextHistory.forEach(item => addToCopiedText(item));
+            const currentHash = copiedTextHistory.join('|'); // Create a hash of the current history
+            if (currentHash !== lastCopiedTextHash) { // Only update UI if data has changed
+                lastCopiedTextHash = currentHash;
+                copiedTextList.innerHTML = ''; // Clear existing items
+                if (copiedTextHistory.length === 0) {
+                    const emptyItem = document.createElement('li');
+                    emptyItem.textContent = 'No copied text yet...';
+                    emptyItem.className = 'text-gray-500';
+                    copiedTextList.appendChild(emptyItem);
+                } else {
+                    // Ensure latest text is at the top
+                    copiedTextHistory.forEach(item => addToCopiedText(item));
+                }
             }
         } else {
             throw new Error(data.message || 'Failed to load copied text');
@@ -234,6 +239,7 @@ clearHistoryBtn.addEventListener('click', async () => {
         if (data.status !== 'success') {
             throw new Error(data.message || 'Failed to clear submitted text history');
         }
+        alert('Submitted text history cleared!');
     } catch (error) {
         console.error('Error clearing submitted text history:', error);
         errorMessage.textContent = `Error clearing submitted text history: ${error.message}`;
@@ -255,6 +261,7 @@ clearCopiedTextBtn.addEventListener('click', async () => {
         if (data.status !== 'success') {
             throw new Error(data.message || 'Failed to clear copied text history');
         }
+        alert('Copied text history cleared!');
     } catch (error) {
         console.error('Error clearing copied text history:', error);
         errorMessage.textContent = `Error clearing copied text history: ${error.message}`;
@@ -283,13 +290,14 @@ submitBtn.addEventListener('click', async () => {
                 body: JSON.stringify({ text }),
             });
             if (!clipboardResponse.ok) {
-                throw new Error(`HTTP error! Status: ${clipboardResponse.status}`);
+                const errorData = await clipboardResponse.json();
+                throw new Error(errorData.message || `HTTP error! Status: ${clipboardResponse.status}`);
             }
             const clipboardData = await clipboardResponse.json();
             if (clipboardData.status !== 'success') {
                 throw new Error(clipboardData.message || 'Failed to send to clipboard');
             }
-            alert('Text sent to system clipboard!');
+            alert('Text sent to system clipboard! It will be copied shortly.');
         }
 
         // Save to submitted_text_history (to show in Clipboard Manager history)
@@ -301,13 +309,15 @@ submitBtn.addEventListener('click', async () => {
                 body: JSON.stringify({ text }),
             });
             if (!historyResponse.ok) {
-                throw new Error(`HTTP error! Status: ${historyResponse.status}`);
+                const errorData = await historyResponse.json();
+                throw new Error(errorData.message || `HTTP error! Status: ${historyResponse.status}`);
             }
             const historyData = await historyResponse.json();
             if (historyData.status !== 'success') {
                 throw new Error(historyData.message || 'Failed to add to submitted text history');
             }
             addToSubmittedTextHistory(text); // Add to UI immediately
+            alert('Text added to history!');
         }
 
         textInput.value = ''; // Clear input after submission
