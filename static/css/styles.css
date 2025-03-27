@@ -1,15 +1,15 @@
 body {
     margin: 0;
     font-family: 'Roboto', sans-serif;
-    background: linear-gradient(135deg, #1e3c72, #2a5298);
-    color: #fff;
+    background: linear-gradient(135deg, #4A90E2, #EAF4FF); /* वाइब्रेंट स्काई ब्लू से हल्का नीला */
+    color: #2D3748; /* गहरा ग्रे टेक्स्ट */
     min-height: 100vh;
     display: flex;
     flex-direction: column;
 }
 
 header, footer {
-    background: linear-gradient(90deg, #2a5298, #1e3c72);
+    background: linear-gradient(90deg, #4A90E2, #F5A623); /* स्काई ब्लू से सनशाइन येलो */
     color: #fff;
     text-align: center;
     padding: 20px;
@@ -49,7 +49,7 @@ footer p {
 
 .footer-btn {
     padding: 10px 20px;
-    background: linear-gradient(90deg, #2a5298, #1e3c72);
+    background: linear-gradient(90deg, #F5A623, #4A90E2); /* सनशाइन येलो से स्काई ब्लू */
     border: none;
     border-radius: 8px;
     color: #fff;
@@ -59,13 +59,13 @@ footer p {
 }
 
 .footer-btn:hover {
-    background: linear-gradient(90deg, #1e3c72, #2a5298);
+    background: linear-gradient(90deg, #4A90E2, #F5A623); /* रिवर्स ग्रेडिएंट */
     transform: scale(1.05);
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
 }
 
 .footer-btn.active {
-    background: linear-gradient(90deg, #1e3c72, #2a5298);
+    background: linear-gradient(90deg, #4A90E2, #F5A623);
     transform: scale(1.02);
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
 }
@@ -84,7 +84,7 @@ footer p {
 
 .login-section h2 {
     margin-bottom: 20px;
-    color: #1e3c72;
+    color: #4A90E2; /* स्काई ब्लू */
     font-size: 1.8em;
 }
 
@@ -95,19 +95,19 @@ footer p {
     border: 1px solid #ccc;
     border-radius: 8px;
     font-size: 1em;
-    background: #f5f5f5;
+    background: #F7FAFF; /* हल्का नीला-ग्रे */
     transition: border-color 0.3s ease;
 }
 
 .login-section input:focus {
-    border-color: #2a5298;
+    border-color: #F5A623; /* सनशाइन येलो */
     outline: none;
 }
 
 .login-section button, .nav-button {
     width: 100%;
     padding: 12px;
-    background: linear-gradient(90deg, #2a5298, #1e3c72);
+    background: linear-gradient(90deg, #4A90E2, #F5A623); /* स्काई ब्लू से सनशाइन येलो */
     border: none;
     border-radius: 8px;
     color: #fff;
@@ -119,7 +119,7 @@ footer p {
 }
 
 .login-section button:hover, .nav-button:hover {
-    background: linear-gradient(90deg, #1e3c72, #2a5298);
+    background: linear-gradient(90deg, #F5A623, #4A90E2); /* रिवर्स ग्रेडिएंट */
     transform: scale(1.02);
 }
 
@@ -130,13 +130,13 @@ footer p {
 }
 
 .error-message {
-    color: #ff6b6b;
+    color: #FF6F61; /* कोरल रेड */
     margin-top: 10px;
     font-size: 0.9em;
 }
 
 .success-message {
-    color: #28a745;
+    color: #2ECC71; /* एमराल्ड ग्रीन */
     margin-bottom: 15px;
     font-size: 1em;
 }
@@ -163,7 +163,7 @@ main {
 /* Form Section */
 .form-section {
     padding: 30px;
-    background: #f9f9f9;
+    background: #F7FAFF; /* हल्का नीला-ग्रे */
 }
 
 .form-section textarea {
@@ -179,7 +179,7 @@ main {
 }
 
 .form-section textarea:focus {
-    border-color: #2a5298;
+    border-color: #F5A623; /* सनशाइन येलो */
     outline: none;
 }
 
@@ -189,7 +189,7 @@ main {
     font-size: 1em;
     border: none;
     border-radius: 8px;
-    background: linear-gradient(90deg, #2a5298, #1e3c72);
+    background: linear-gradient(90deg, #4A90E2, #F5A623); /* स्काई ब्लू से सनशाइन येलो */
     color: #fff;
     cursor: pointer;
     transition: transform 0.1s ease, background 0.3s ease;
@@ -197,12 +197,12 @@ main {
 
 .form-section select {
     background: #fff;
-    color: #333;
+    color: #2D3748; /* गहरा ग्रे */
     border: 1px solid #ccc;
 }
 
 .form-section button:hover {
-    background: linear-gradient(90deg, #1e3c72, #2a5298);
+    background: linear-gradient(90deg, #F5A623, #4A90E2); /* रिवर्स ग्रेडिएंट */
     transform: scale(1.02);
 }
 
@@ -210,12 +210,12 @@ main {
 .history {
     padding: 30px;
     border-top: 2px solid #e0e0e0;
-    background: #f9f9f9;
+    background: #F7FAFF; /* हल्का नीला-ग्रे */
 }
 
 .container h2, .history h3 {
     margin-bottom: 20px;
-    color: #1e3c72;
+    color: #4A90E2; /* स्काई ब्लू */
     font-size: 1.6em;
 }
 
@@ -230,7 +230,7 @@ main {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    background: linear-gradient(90deg, #ffffff, #f5f5f5);
+    background: linear-gradient(90deg, #FFFFFF, #F7FAFF); /* सफेद से हल्का नीला-ग्रे */
     margin: 10px 0;
     padding: 15px;
     border-radius: 10px;
@@ -253,7 +253,7 @@ main {
     max-height: 100%;
     padding-right: 10px;
     font-size: 0.95em;
-    color: #333;
+    color: #2D3748; /* गहरा ग्रे */
 }
 
 /* Modern Buttons (Copy and Delete) */
@@ -271,31 +271,31 @@ main {
 }
 
 .copy-btn {
-    background: linear-gradient(90deg, #2a5298, #1e3c72);
+    background: linear-gradient(90deg, #4A90E2, #F5A623); /* स्काई ब्लू से सनशाइन येलो */
     color: #fff;
     margin-right: 10px;
 }
 
 .copy-btn:hover {
-    background: linear-gradient(90deg, #1e3c72, #2a5298);
+    background: linear-gradient(90deg, #F5A623, #4A90E2); /* रिवर्स ग्रेडिएंट */
     transform: scale(1.05);
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
 }
 
 .delete-btn {
-    background: linear-gradient(90deg, #ff6b6b, #d94f4f);
+    background: linear-gradient(90deg, #FF6F61, #FF3D3D); /* कोरल रेड से ब्राइट रेड */
     color: #fff;
     font-size: 1em;
 }
 
 .delete-btn:hover {
-    background: linear-gradient(90deg, #d94f4f, #ff6b6b);
+    background: linear-gradient(90deg, #FF3D3D, #FF6F61); /* रिवर्स ग्रेडिएंट */
     transform: scale(1.05);
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
 }
 
 .clear-btn {
-    background: linear-gradient(90deg, #ff6b6b, #d94f4f);
+    background: linear-gradient(90deg, #FF6F61, #FF3D3D); /* कोरल रेड से ब्राइट रेड */
     color: #fff;
     border: none;
     padding: 12px;
@@ -307,7 +307,7 @@ main {
 }
 
 .clear-btn:hover {
-    background: linear-gradient(90deg, #d94f4f, #ff6b6b);
+    background: linear-gradient(90deg, #FF3D3D, #FF6F61); /* रिवर्स ग्रेडिएंट */
     transform: scale(1.02);
 }
 
@@ -325,8 +325,8 @@ th, td {
 }
 
 th {
-    background: #f1f1f1;
-    color: #1e3c72;
+    background: #F7FAFF; /* हल्का नीला-ग्रे */
+    color: #4A90E2; /* स्काई ब्लू */
     font-weight: 600;
 }
 
@@ -345,7 +345,7 @@ th {
 
 .update-form button {
     padding: 8px 12px;
-    background: linear-gradient(90deg, #2a5298, #1e3c72);
+    background: linear-gradient(90deg, #4A90E2, #F5A623); /* स्काई ब्लू से सनशाइन येलो */
     color: #fff;
     border: none;
     border-radius: 6px;
@@ -354,7 +354,7 @@ th {
 }
 
 .update-form button:hover {
-    background: linear-gradient(90deg, #1e3c72, #2a5298);
+    background: linear-gradient(90deg, #F5A623, #4A90E2); /* रिवर्स ग्रेडिएंट */
     transform: scale(1.05);
 }
 
@@ -368,15 +368,17 @@ th {
         transform: translateY(0);
     }
 }
+
 .add-user-form {
     margin-bottom: 20px;
     padding: 15px;
-    background-color: #f9f9f9;
+    background-color: #F7FAFF; /* हल्का नीला-ग्रे */
     border-radius: 5px;
 }
 
 .add-user-form h3 {
     margin-top: 0;
+    color: #4A90E2; /* स्काई ब्लू */
 }
 
 .add-user-form form {
@@ -392,20 +394,21 @@ th {
 
 .add-user-form button {
     padding: 8px 15px;
-    background-color: #007bff;
-    color: white;
+    background: linear-gradient(90deg, #4A90E2, #F5A623); /* स्काई ब्लू से सनशाइन येलो */
+    color: #fff;
     border: none;
     border-radius: 4px;
     cursor: pointer;
 }
 
 .add-user-form button:hover {
-    background-color: #0056b3;
+    background: linear-gradient(90deg, #F5A623, #4A90E2); /* रिवर्स ग्रेडिएंट */
 }
+
 .delete-btn {
     padding: 8px 15px;
-    background-color: #dc3545;
-    color: white;
+    background: linear-gradient(90deg, #FF6F61, #FF3D3D); /* कोरल रेड से ब्राइट रेड */
+    color: #fff;
     border: none;
     border-radius: 4px;
     cursor: pointer;
@@ -413,5 +416,5 @@ th {
 }
 
 .delete-btn:hover {
-    background-color: #c82333;
+    background: linear-gradient(90deg, #FF3D3D, #FF6F61); /* रिवर्स ग्रेडिएंट */
 }
